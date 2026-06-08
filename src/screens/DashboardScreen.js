@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert,
+  View, Text, ScrollView, TouchableOpacity, Image, StyleSheet, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -81,19 +81,12 @@ export default function DashboardScreen({ navigation }) {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <LinearGradient
-              colors={[colors.accent, colors.accent2]}
-              style={styles.brandAvatar}
-            >
-              <Text style={styles.brandAvatarText}>
-                {company.name.slice(0, 2).toUpperCase()}
-              </Text>
-            </LinearGradient>
-            <View>
-              <Text style={styles.greeting}>Bonjour 👋</Text>
-              <Text style={styles.brandName}>{company.name}</Text>
-            </View>
+          <Image source={require('../assets/logo.png')} style={styles.brandAvatar} />
+          <View>
+            <Text style={styles.greeting}>Bonjour 👋</Text>
+            <Text style={styles.brandName}>{company.name}</Text>
           </View>
+        </View>
         </View>
 
         <LinearGradient colors={colors.heroGradient} style={styles.heroCard}>

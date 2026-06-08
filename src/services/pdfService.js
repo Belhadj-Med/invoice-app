@@ -1,6 +1,7 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
+import { Asset } from 'expo-asset';
 import { calcTotals, fmtCurrency, fmtDateFR } from '../utils/documentUtils';
 
 function escapeHtml(text) {
@@ -11,7 +12,7 @@ function escapeHtml(text) {
     .replace(/"/g, '&quot;');
 }
 
-export function buildDocumentHtml(document, company) {
+export function buildDocumentHtml(document, company, logoDataUri) {
   const { ht, tva, ttc } = calcTotals(document.lineItems, document.docType);
   const isAvoir = document.docType === 'Avoir';
   const rows = (document.lineItems || [])
@@ -30,13 +31,17 @@ export function buildDocumentHtml(document, company) {
     ? ''
     : `<tr><td>TVA (19%)</td><td style="text-align:right">${fmtCurrency(tva)}</td></tr>`;
 
+  const logoHtml = logoDataUri
+    ? `<img src="${escapeHtml(logoDataUri)}" style="width:64px;height:64px;border-radius:8px;object-fit:contain;margin-right:8px"/>`
+    : '';
+
   return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
   <style>
     body { font-family: Helvetica, Arial, sans-serif; color: #1a1a2e; padding: 32px; font-size: 12px; }
-    .header { display: flex; justify-content: space-between; margin-bottom: 24px; }
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
     .brand { font-size: 22px; font-weight: 800; color: #0a0a1a; }
     .doc-type { font-size: 14px; font-weight: 800; color: #6c63ff; text-transform: uppercase; text-align: right; }
     .divider { border-top: 1px solid #e8e8f0; margin: 16px 0; }
@@ -56,7 +61,7 @@ export function buildDocumentHtml(document, company) {
 <body>
   <div class="header">
     <div style="display:flex;align-items:center;gap:12px">
-      ${company.logo ? `<img src="${escapeHtml(company.logo)}" style="width:64px;height:64px;border-radius:8px;object-fit:contain;margin-right:8px"/>` : ''}
+      ${logoHtml}
       <div>
         <div class="brand">${escapeHtml(company.name)}</div>
         <div style="color:#888;font-size:10px">${escapeHtml(company.legalName)}</div>
@@ -108,8 +113,29 @@ export function buildDocumentHtml(document, company) {
 </html>`;
 }
 
+async function resolveLogoDataUri(company) {
+  if (company?.logo) {
+    return company.logo;
+  }
+
+  const asset = Asset.fromModule(require('../assets/logo.png'));
+  if (!asset.localUri) {
+    await asset.downloadAsync();
+  }
+
+  const uri = asset.localUri || asset.uri;
+  if (!uri) {
+    return '';
+  }
+
+  const ext = uri.split('.').pop().split('?')[0] || 'png';
+  const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+  return `data:image/${ext};base64,${base64}`;
+}
+
 export async function downloadDocumentPdf(document, company) {
-  const html = buildDocumentHtml(document, company);
+  const logoDataUri = await resolveLogoDataUri(company);
+  const html = buildDocumentHtml(document, company, logoDataUri);
   const { uri } = await Print.printToFileAsync({ html });
   const safeName = document.docNumber.replace(/[/\\?%*:|"<>]/g, '-');
   const dest = `${FileSystem.documentDirectory}${safeName}.pdf`;

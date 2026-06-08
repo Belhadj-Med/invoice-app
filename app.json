@@ -5,6 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
+    "icon": "./src/assets/logo.png",
     "splash": {
       "backgroundColor": "#0a0a0f"
     },
@@ -14,6 +15,7 @@
     },
     "android": {
       "adaptiveIcon": {
+        "foregroundImage": "./src/assets/logo.png",
         "backgroundColor": "#0a0a0f"
       },
       "package": "fr.alaapp.mobile",
@@ -24,6 +26,11 @@
     },
     "plugins": [
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "f92cda31-60ce-4845-8e55-b13c937eb2c8"
+      }
+    }
   }
 }

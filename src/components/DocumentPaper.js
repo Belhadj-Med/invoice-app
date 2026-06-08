@@ -33,10 +33,8 @@ export default function DocumentPaper({ document, company }) {
   return (
     <View style={styles.pdfPaper}>
       <View style={styles.pdfTopRow}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          {company.logo ? (
-            <Image source={{ uri: company.logo }} style={styles.logo} />
-          ) : null}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Image source={require('../assets/logo.png')} style={styles.logo} />
           <View>
             <Text style={styles.pdfBrand}>{company.name}</Text>
             <Text style={styles.pdfSubBrand}>{company.legalName}</Text>
@@ -135,8 +133,8 @@ const styles = StyleSheet.create({
     shadowRadius: 30,
     elevation: 8,
   },
-  pdfTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 },
-  logo: { width: 48, height: 48, borderRadius: 8, marginRight: 8 },
+  pdfTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  logo: { width: 48, height: 48, borderRadius: 8, marginRight: 6 },
   pdfBrand: { fontSize: 18, fontWeight: '800', color: '#0a0a1a', letterSpacing: -0.3 },
   pdfSubBrand: { fontSize: 8, color: '#888', marginTop: 1 },
   pdfDocType: { fontSize: 11, fontWeight: '800', color: '#6c63ff', textTransform: 'uppercase', letterSpacing: 0.5 },
