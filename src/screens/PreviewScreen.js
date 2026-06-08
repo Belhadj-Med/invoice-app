@@ -12,14 +12,16 @@ import { downloadDocumentPdf } from '../services/pdfService';
 import { sendDocumentEmail } from '../services/emailService';
 import { STATUS } from '../constants/document';
 
-export default function PreviewScreen({ navigation }) {
+export default function PreviewScreen({ navigation, route }) {
   const {
     previewDocument, company, activeDocumentId,
-    updateDocumentStatus, getClientById, showToast, loadDocumentForEdit, previewOrigin, setPreviewOrigin,
+    updateDocumentStatus, getClientById, showToast, loadDocumentForEdit,
   } = useApp();
   const { colors, shared } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [loading, setLoading] = useState(false);
+
+  const origin = route.params?.origin;
 
   const doc = previewDocument;
   const client = doc.clientId ? getClientById(doc.clientId) : null;
@@ -93,11 +95,8 @@ export default function PreviewScreen({ navigation }) {
         <TouchableOpacity
           style={shared.backBtn}
           onPress={() => {
-            if (previewOrigin && previewOrigin.tab) {
-              const tab = previewOrigin.tab;
-              const opts = previewOrigin.screen ? { screen: previewOrigin.screen, params: previewOrigin.params } : undefined;
-              navigation.getParent()?.navigate(tab, opts);
-              setPreviewOrigin(null);
+            if (origin && origin.tab) {
+              navigation.navigate(origin.tab, origin.screen ? { screen: origin.screen, params: origin.params } : undefined);
               return;
             }
             navigation.goBack();

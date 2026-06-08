@@ -121,8 +121,8 @@ export default function ClientDetailScreen({ route, navigation }) {
                     <TouchableOpacity
                       style={localStyles.docMain}
                       onPress={() => {
-                        openDocumentPreview(doc.id, { tab: 'Clients', screen: 'ClientDetail', params: { clientId } });
-                        navigation.getParent()?.navigate('Preview');
+                        openDocumentPreview(doc.id);
+                        navigation.getParent()?.navigate('Preview', { origin: { tab: 'Clients', screen: 'ClientDetail', params: { clientId } } });
                       }}
                       activeOpacity={0.7}
                     >

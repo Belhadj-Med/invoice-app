@@ -35,7 +35,6 @@ export function AppProvider({ children }) {
   const [draft, setDraft] = useState(EMPTY_DRAFT);
   const [activeDocumentId, setActiveDocumentId] = useState(null);
   const [editingDocumentId, setEditingDocumentId] = useState(null);
-  const [previewOrigin, setPreviewOrigin] = useState(null);
 
   const [toast, setToast] = useState({ visible: false, message: '', type: 'purple' });
   const toastTimer = useRef(null);
@@ -390,10 +389,9 @@ export function AppProvider({ children }) {
     showToast('🗑️ Document supprimé', 'purple');
   }, [activeDocumentId, showToast]);
 
-  const openDocumentPreview = useCallback((documentId, origin = null) => {
+  const openDocumentPreview = useCallback((documentId) => {
     setActiveDocumentId(documentId);
     setEditingDocumentId(null);
-    setPreviewOrigin(origin);
   }, []);
 
   const dashboardStats = useMemo(
@@ -448,8 +446,6 @@ export function AppProvider({ children }) {
         updateDocumentStatus,
         deleteDocument,
         openDocumentPreview,
-        previewOrigin,
-        setPreviewOrigin,
         setActiveDocumentId,
         calcTotals,
         fmtCurrency,

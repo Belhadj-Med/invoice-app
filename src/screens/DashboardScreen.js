@@ -65,8 +65,8 @@ export default function DashboardScreen({ navigation }) {
   const monthLabel = new Date().toLocaleDateString('fr-TN', { month: 'long', year: 'numeric' });
 
   const openDoc = (doc) => {
-    openDocumentPreview(doc.id, { tab: 'Dashboard' });
-    navigation.navigate('Preview');
+    openDocumentPreview(doc.id);
+    navigation.navigate('Preview', { origin: { tab: 'Dashboard' } });
   };
 
   const handleDelete = (doc) => {
