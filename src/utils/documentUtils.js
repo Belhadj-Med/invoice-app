@@ -71,43 +71,33 @@ export function getClientStats(clientId, documents) {
   return { count: docs.length, total };
 }
 
-export function getDashboardStats(documents, clients) {
+export function getDashboardStats(documents, clients, counters = {}) {
   const now = new Date();
   const thisMonth = now.getMonth();
   const thisYear = now.getFullYear();
 
   const factures = documents.filter(d => d.docType === 'Facture');
-  const paidThisMonth = factures.filter(d => {
-    if (d.status !== 'paid') return false;
-    const created = new Date(d.createdAt);
-    return created.getMonth() === thisMonth && created.getFullYear() === thisYear;
-  });
 
-  const revenue = paidThisMonth.reduce(
-    (s, d) => s + calcTotals(d.lineItems, d.docType).ttc,
-    0,
-  );
+  // Revenue: prefer stored counters.revenues for accuracy, fall back to documents
+  const yearRevs = (counters.revenues && counters.revenues[thisYear]) || {};
+  const revenue = yearRevs[thisMonth] || factures
+    .filter(d => d.status === 'paid' && new Date(d.paidAt || d.updatedAt || d.createdAt).getMonth() === thisMonth && new Date(d.paidAt || d.updatedAt || d.createdAt).getFullYear() === thisYear)
+    .reduce((s, d) => s + calcTotals(d.lineItems, d.docType).ttc, 0);
 
   const pendingCount = documents.filter(
     d => d.docType === 'Facture' && d.status === 'pending',
   ).length;
 
-  const monthlyRevenue = Array.from({ length: 6 }, (_, i) => {
-    const d = new Date(thisYear, thisMonth - (5 - i), 1);
-    const month = d.getMonth();
-    const year = d.getFullYear();
-    const total = factures
-      .filter(doc => {
-        if (doc.status !== 'paid') return false;
-        const created = new Date(doc.createdAt);
-        return created.getMonth() === month && created.getFullYear() === year;
-      })
-      .reduce((s, doc) => s + calcTotals(doc.lineItems, doc.docType).ttc, 0);
-    return {
-      month: d.toLocaleDateString('fr-TN', { month: 'short' }),
-      total,
-      highlight: i === 5,
-    };
+  // Build monthly revenue for months from January up to current month
+  const monthlyRevenue = Array.from({ length: thisMonth + 1 }, (_, m) => {
+    const month = m;
+    const monthName = new Date(thisYear, month, 1).toLocaleDateString('fr-TN', { month: 'short' });
+    const total = (yearRevs[month] != null)
+      ? yearRevs[month]
+      : factures
+        .filter(doc => doc.status === 'paid' && new Date(doc.paidAt || doc.updatedAt || doc.createdAt).getMonth() === month)
+        .reduce((s, doc) => s + calcTotals(doc.lineItems, doc.docType).ttc, 0);
+    return { month: monthName, total, highlight: month === thisMonth };
   });
 
   const maxRevenue = Math.max(...monthlyRevenue.map(m => m.total), 1);

@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Image } from 'react-native';
 import { calcTotals, fmtCurrency, fmtDateFR } from '../utils/documentUtils';
 
 function Divider() {
@@ -33,9 +33,14 @@ export default function DocumentPaper({ document, company }) {
   return (
     <View style={styles.pdfPaper}>
       <View style={styles.pdfTopRow}>
-        <View>
-          <Text style={styles.pdfBrand}>{company.name}</Text>
-          <Text style={styles.pdfSubBrand}>{company.legalName}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          {company.logo ? (
+            <Image source={{ uri: company.logo }} style={styles.logo} />
+          ) : null}
+          <View>
+            <Text style={styles.pdfBrand}>{company.name}</Text>
+            <Text style={styles.pdfSubBrand}>{company.legalName}</Text>
+          </View>
         </View>
         <View style={{ alignItems: 'flex-end' }}>
           <Text style={styles.pdfDocType}>{document.docType.toUpperCase()}</Text>
@@ -131,6 +136,7 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   pdfTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 },
+  logo: { width: 48, height: 48, borderRadius: 8, marginRight: 8 },
   pdfBrand: { fontSize: 18, fontWeight: '800', color: '#0a0a1a', letterSpacing: -0.3 },
   pdfSubBrand: { fontSize: 8, color: '#888', marginTop: 1 },
   pdfDocType: { fontSize: 11, fontWeight: '800', color: '#6c63ff', textTransform: 'uppercase', letterSpacing: 0.5 },

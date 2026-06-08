@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -33,7 +33,7 @@ function MiniBarChart({ data, colors, styles }) {
   );
 }
 
-function InvoiceRow({ item, onPress, colors, styles }) {
+function InvoiceRow({ item, onPress, onDelete, colors, styles }) {
   const cfg = STATUS[item.status] || STATUS.pending;
   const iconColor = cfg.pill === 'green' ? colors.accent3 : cfg.pill === 'yellow' ? colors.warm : colors.accent2;
   const { ttc } = calcTotals(item.lineItems, item.docType);
@@ -49,21 +49,31 @@ function InvoiceRow({ item, onPress, colors, styles }) {
       <View style={styles.invRight}>
         <Text style={styles.invAmount}>{fmtCurrency(ttc)}</Text>
         <StatPill type={cfg.pill} label={cfg.label} />
+        <TouchableOpacity onPress={() => onDelete(item)} style={{ marginTop: 6 }}>
+          <Ionicons name="trash-outline" size={16} color={colors.danger} />
+        </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
 }
 
 export default function DashboardScreen({ navigation }) {
-  const { dashboardStats, openDocumentPreview, company, startNewDocument } = useApp();
+  const { dashboardStats, openDocumentPreview, company, startNewDocument, deleteDocument } = useApp();
   const { colors, shared } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const monthLabel = new Date().toLocaleDateString('fr-TN', { month: 'long', year: 'numeric' });
 
   const openDoc = (doc) => {
-    openDocumentPreview(doc.id);
+    openDocumentPreview(doc.id, { tab: 'Dashboard' });
     navigation.navigate('Preview');
+  };
+
+  const handleDelete = (doc) => {
+    Alert.alert('Supprimer', 'Supprimer ce document ?', [
+      { text: 'Annuler', style: 'cancel' },
+      { text: 'Supprimer', style: 'destructive', onPress: () => deleteDocument(doc.id) },
+    ]);
   };
 
   return (
@@ -142,6 +152,7 @@ export default function DashboardScreen({ navigation }) {
                 <InvoiceRow
                   item={item}
                   onPress={() => openDoc(item)}
+                  onDelete={() => handleDelete(item)}
                   colors={colors}
                   styles={styles}
                 />

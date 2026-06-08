@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, TextInput,
+  View, Text, ScrollView, TouchableOpacity, TextInput, Image,
   StyleSheet, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -10,6 +10,7 @@ import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
 
 const FIELDS = [
+  { key: 'logo', label: 'Logo (URL ou data URI)', autoCapitalize: 'none' },
   { key: 'name', label: 'Nom commercial' },
   { key: 'legalName', label: 'Raison sociale' },
   { key: 'matriculeFiscal', label: 'Matricule fiscal' },
@@ -50,6 +51,11 @@ export default function CompanyInfoScreen({ navigation }) {
         </View>
 
         <ScrollView contentContainerStyle={localStyles.content} keyboardShouldPersistTaps="handled">
+          {form.logo ? (
+            <View style={{ alignItems: 'center', marginBottom: 12 }}>
+              <Image source={{ uri: form.logo }} style={{ width: 96, height: 96, borderRadius: 12 }} />
+            </View>
+          ) : null}
           <Text style={[shared.sectionLabel, { marginBottom: 14 }]}>
             Ces informations apparaissent sur vos factures, devis et avoirs
           </Text>

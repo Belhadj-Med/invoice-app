@@ -15,7 +15,7 @@ import { STATUS } from '../constants/document';
 export default function PreviewScreen({ navigation }) {
   const {
     previewDocument, company, activeDocumentId,
-    updateDocumentStatus, getClientById, showToast, loadDocumentForEdit,
+    updateDocumentStatus, getClientById, showToast, loadDocumentForEdit, previewOrigin, setPreviewOrigin,
   } = useApp();
   const { colors, shared } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -47,8 +47,12 @@ export default function PreviewScreen({ navigation }) {
       showToast('⚠️ Enregistrez le document d\'abord', 'red');
       return;
     }
+    if (!client?.email) {
+      showToast('⚠️ Aucun e-mail client disponible', 'red');
+      return;
+    }
     try {
-      await sendDocumentEmail(doc, company, client?.email);
+      await sendDocumentEmail(doc, company, client.email);
       showToast('📧 Application e-mail ouverte', 'green');
     } catch {
       showToast('❌ Aucune application e-mail', 'red');
@@ -86,7 +90,19 @@ export default function PreviewScreen({ navigation }) {
   return (
     <SafeAreaView style={shared.screen} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity style={shared.backBtn} onPress={() => navigation.navigate('Create')}>
+        <TouchableOpacity
+          style={shared.backBtn}
+          onPress={() => {
+            if (previewOrigin && previewOrigin.tab) {
+              const tab = previewOrigin.tab;
+              const opts = previewOrigin.screen ? { screen: previewOrigin.screen, params: previewOrigin.params } : undefined;
+              navigation.getParent()?.navigate(tab, opts);
+              setPreviewOrigin(null);
+              return;
+            }
+            navigation.goBack();
+          }}
+        >
           <Ionicons name="arrow-back" size={16} color={colors.text2} />
         </TouchableOpacity>
         <Text style={shared.screenTitle}>Aperçu</Text>

@@ -18,7 +18,7 @@ function ClientRow({ client, onSelect, styles, colors, stats }) {
       </View>
       <View style={styles.clientInfo}>
         <Text style={styles.clientName} numberOfLines={1}>{client.name}</Text>
-        <Text style={styles.clientMeta} numberOfLines={1}>{client.company} · {client.email}</Text>
+        <Text style={styles.clientMeta} numberOfLines={1}>{client.phone || '—'}</Text>
       </View>
       <View style={styles.clientStats}>
         <Text style={styles.clientTotal}>{stats.total}</Text>
@@ -36,13 +36,11 @@ export default function ClientsScreen({ navigation }) {
   const [search, setSearch] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
   const [newName, setNewName] = useState('');
-  const [newEmail, setNewEmail] = useState('');
-  const [newCompany, setNewCompany] = useState('');
+  const [newPhone, setNewPhone] = useState('');
 
   const filtered = clients.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.company.toLowerCase().includes(search.toLowerCase()) ||
-    c.email.toLowerCase().includes(search.toLowerCase()),
+    (c.phone || '').toLowerCase().includes(search.toLowerCase()),
   );
 
   const handleAdd = () => {
@@ -52,13 +50,11 @@ export default function ClientsScreen({ navigation }) {
     }
     const client = addClient({
       name: newName.trim(),
-      email: newEmail.trim() || '',
-      company: newCompany.trim() || '—',
+      phone: newPhone.trim() || '',
     });
     showToast(`✅ Client ajouté : ${client.name}`, 'green');
     setNewName('');
-    setNewEmail('');
-    setNewCompany('');
+    setNewPhone('');
     setModalVisible(false);
   };
 
@@ -130,12 +126,8 @@ export default function ClientsScreen({ navigation }) {
               <TextInput style={shared.inputField} value={newName} onChangeText={setNewName} placeholder="Nom du client" placeholderTextColor={colors.text3} />
             </View>
             <View style={styles.inputWrap}>
-              <Text style={shared.inputLabel}>E-mail</Text>
-              <TextInput style={shared.inputField} value={newEmail} onChangeText={setNewEmail} placeholder="email@exemple.tn" placeholderTextColor={colors.text3} keyboardType="email-address" autoCapitalize="none" />
-            </View>
-            <View style={styles.inputWrap}>
-              <Text style={shared.inputLabel}>Entreprise</Text>
-              <TextInput style={shared.inputField} value={newCompany} onChangeText={setNewCompany} placeholder="Entreprise" placeholderTextColor={colors.text3} />
+              <Text style={shared.inputLabel}>Téléphone</Text>
+              <TextInput style={shared.inputField} value={newPhone} onChangeText={setNewPhone} placeholder="Téléphone" placeholderTextColor={colors.text3} keyboardType="phone-pad" />
             </View>
             <TouchableOpacity onPress={handleAdd} activeOpacity={0.85}>
               <LinearGradient colors={[colors.accent, colors.accent2]} style={styles.modalBtn}>

@@ -35,6 +35,7 @@ export function AppProvider({ children }) {
   const [draft, setDraft] = useState(EMPTY_DRAFT);
   const [activeDocumentId, setActiveDocumentId] = useState(null);
   const [editingDocumentId, setEditingDocumentId] = useState(null);
+  const [previewOrigin, setPreviewOrigin] = useState(null);
 
   const [toast, setToast] = useState({ visible: false, message: '', type: 'purple' });
   const toastTimer = useRef(null);
@@ -320,27 +321,84 @@ export function AppProvider({ children }) {
 
   const updateDocumentStatus = useCallback((documentId, status) => {
     setDocuments(prev =>
-      prev.map(d =>
-        d.id === documentId ? { ...d, status, updatedAt: new Date().toISOString() } : d,
-      ),
+      prev.map(d => {
+        if (d.id !== documentId) return d;
+        // Prevent status changes for Devis and Avoir
+        if (d.docType === 'Devis' || d.docType === 'Avoir') return d;
+        const now = new Date().toISOString();
+        const updated = { ...d, status, updatedAt: now };
+        // If moving to paid from non-paid, set paidAt and update counters.revenues
+        if (status === 'paid' && d.status !== 'paid') {
+          updated.paidAt = now;
+          setCounters(prevCounters => {
+            const year = new Date().getFullYear();
+            const month = new Date().getMonth();
+            const add = calcTotals(d.lineItems, d.docType).ttc;
+            const prevRevs = prevCounters.revenues || {};
+            const yearRevs = { ...(prevRevs[year] || {}) };
+            yearRevs[month] = (yearRevs[month] || 0) + add;
+            return {
+              ...prevCounters,
+              revenues: { ...prevRevs, [year]: yearRevs },
+            };
+          });
+        }
+        // If moving from paid to non-paid, subtract from stored revenue
+        if (d.status === 'paid' && status !== 'paid') {
+          const paidDate = d.paidAt ? new Date(d.paidAt) : new Date(d.updatedAt || d.createdAt);
+          const year = paidDate.getFullYear();
+          const month = paidDate.getMonth();
+          const sub = calcTotals(d.lineItems, d.docType).ttc;
+          setCounters(prevCounters => {
+            const prevRevs = prevCounters.revenues || {};
+            const yearRevs = { ...(prevRevs[year] || {}) };
+            yearRevs[month] = Math.max(0, (yearRevs[month] || 0) - sub);
+            return {
+              ...prevCounters,
+              revenues: { ...prevRevs, [year]: yearRevs },
+            };
+          });
+          delete updated.paidAt;
+        }
+        return updated;
+      }),
     );
     showToast('✅ Statut mis à jour', 'green');
   }, [showToast]);
 
   const deleteDocument = useCallback((documentId) => {
-    setDocuments(prev => prev.filter(d => d.id !== documentId));
+    setDocuments(prev => {
+      const toDelete = prev.find(d => d.id === documentId);
+      if (toDelete && toDelete.status === 'paid') {
+        const paidDate = toDelete.paidAt ? new Date(toDelete.paidAt) : new Date(toDelete.updatedAt || toDelete.createdAt);
+        const year = paidDate.getFullYear();
+        const month = paidDate.getMonth();
+        const sub = calcTotals(toDelete.lineItems, toDelete.docType).ttc;
+        setCounters(prevCounters => {
+          const prevRevs = prevCounters.revenues || {};
+          const yearRevs = { ...(prevRevs[year] || {}) };
+          yearRevs[month] = Math.max(0, (yearRevs[month] || 0) - sub);
+          return {
+            ...prevCounters,
+            revenues: { ...prevRevs, [year]: yearRevs },
+          };
+        });
+      }
+      return prev.filter(d => d.id !== documentId);
+    });
     if (activeDocumentId === documentId) setActiveDocumentId(null);
     showToast('🗑️ Document supprimé', 'purple');
   }, [activeDocumentId, showToast]);
 
-  const openDocumentPreview = useCallback((documentId) => {
+  const openDocumentPreview = useCallback((documentId, origin = null) => {
     setActiveDocumentId(documentId);
     setEditingDocumentId(null);
+    setPreviewOrigin(origin);
   }, []);
 
   const dashboardStats = useMemo(
-    () => getDashboardStats(documents, clients),
-    [documents, clients],
+    () => getDashboardStats(documents, clients, counters),
+    [documents, clients, counters],
   );
 
   const getClientDisplayStats = useCallback(
@@ -390,6 +448,8 @@ export function AppProvider({ children }) {
         updateDocumentStatus,
         deleteDocument,
         openDocumentPreview,
+        previewOrigin,
+        setPreviewOrigin,
         setActiveDocumentId,
         calcTotals,
         fmtCurrency,

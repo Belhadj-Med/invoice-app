@@ -78,8 +78,7 @@ export default function ClientDetailScreen({ route, navigation }) {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={localStyles.clientName}>{client.name}</Text>
-            <Text style={localStyles.clientMeta}>{client.company}</Text>
-            <Text style={localStyles.clientMeta}>{client.email}</Text>
+            <Text style={localStyles.clientMeta}>{client.phone || '—'}</Text>
           </View>
           <View style={localStyles.statsBox}>
             <Text style={localStyles.statsTotal}>{stats.total}</Text>
@@ -122,7 +121,7 @@ export default function ClientDetailScreen({ route, navigation }) {
                     <TouchableOpacity
                       style={localStyles.docMain}
                       onPress={() => {
-                        openDocumentPreview(doc.id);
+                        openDocumentPreview(doc.id, { tab: 'Clients', screen: 'ClientDetail', params: { clientId } });
                         navigation.getParent()?.navigate('Preview');
                       }}
                       activeOpacity={0.7}
@@ -139,9 +138,13 @@ export default function ClientDetailScreen({ route, navigation }) {
                       <Text style={localStyles.docAmount}>{fmtCurrency(ttc)}</Text>
                     </TouchableOpacity>
                     <View style={localStyles.docActions}>
-                      <TouchableOpacity onPress={() => setStatusDocId(doc.id)}>
+                      {doc.docType === 'Facture' ? (
+                        <TouchableOpacity onPress={() => setStatusDocId(doc.id)}>
+                          <StatPill type={cfg.pill} label={cfg.label} />
+                        </TouchableOpacity>
+                      ) : (
                         <StatPill type={cfg.pill} label={cfg.label} />
-                      </TouchableOpacity>
+                      )}
                       <TouchableOpacity
                         onPress={() => deleteDocument(doc.id)}
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}

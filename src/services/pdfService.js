@@ -55,9 +55,12 @@ export function buildDocumentHtml(document, company) {
 </head>
 <body>
   <div class="header">
-    <div>
-      <div class="brand">${escapeHtml(company.name)}</div>
-      <div style="color:#888;font-size:10px">${escapeHtml(company.legalName)}</div>
+    <div style="display:flex;align-items:center;gap:12px">
+      ${company.logo ? `<img src="${escapeHtml(company.logo)}" style="width:64px;height:64px;border-radius:8px;object-fit:contain;margin-right:8px"/>` : ''}
+      <div>
+        <div class="brand">${escapeHtml(company.name)}</div>
+        <div style="color:#888;font-size:10px">${escapeHtml(company.legalName)}</div>
+      </div>
     </div>
     <div>
       <div class="doc-type">${escapeHtml(document.docType)}</div>
