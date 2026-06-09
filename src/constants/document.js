@@ -9,6 +9,7 @@ export const DOC_PREFIX = {
 export const TVA_RATE = 0.19;
 
 export const SUPPORT_EMAIL = 'mohamedaminbelhadj20@gmail.com';
+export const DOCUMENT_SEND_EMAIL = 'mohamedaminbelhadj21@gmail.com';
 
 export const STATUS = {
   paid:    { label: 'Payé',    pill: 'green',  icon: 'checkmark-circle' },

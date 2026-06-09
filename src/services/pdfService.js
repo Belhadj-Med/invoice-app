@@ -1,8 +1,12 @@
+import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 import { Asset } from 'expo-asset';
 import { calcTotals, fmtCurrency, fmtDateFR } from '../utils/documentUtils';
+
+const DOWNLOAD_DIR_KEY = '@ala_download_dir_uri';
+const { StorageAccessFramework } = FileSystem;
 
 function escapeHtml(text) {
   return String(text || '')
@@ -32,7 +36,7 @@ export function buildDocumentHtml(document, company, logoDataUri) {
     : `<tr><td>TVA (19%)</td><td style="text-align:right">${fmtCurrency(tva)}</td></tr>`;
 
   const logoHtml = logoDataUri
-    ? `<img src="${escapeHtml(logoDataUri)}" style="width:64px;height:64px;border-radius:8px;object-fit:contain;margin-right:8px"/>`
+    ? `<img src="${logoDataUri}" style="width:64px;height:64px;border-radius:8px;object-fit:contain;margin-right:8px"/>`
     : '';
 
   return `<!DOCTYPE html>
@@ -118,35 +122,112 @@ async function resolveLogoDataUri(company) {
     return company.logo;
   }
 
-  const asset = Asset.fromModule(require('../assets/logo.png'));
-  if (!asset.localUri) {
+  try {
+    const asset = Asset.fromModule(require('../assets/logo.png'));
     await asset.downloadAsync();
-  }
 
-  const uri = asset.localUri || asset.uri;
-  if (!uri) {
+    const uri = asset.localUri || asset.uri;
+    if (!uri) {
+      return '';
+    }
+
+    const base64 = await FileSystem.readAsStringAsync(uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    return `data:image/png;base64,${base64}`;
+  } catch {
     return '';
   }
+}
 
-  const ext = uri.split('.').pop().split('?')[0] || 'png';
-  const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
-  return `data:image/${ext};base64,${base64}`;
+function sanitizePdfFileName(docNumber) {
+  return `${docNumber.replace(/[/\\?%*:|"<>]/g, '-')}.pdf`;
+}
+
+async function assertPdfReady(pdfUri) {
+  const info = await FileSystem.getInfoAsync(pdfUri);
+  if (!info.exists || info.size === 0) {
+    throw new Error('PDF_GENERATION_FAILED');
+  }
+}
+
+async function writePdfToAndroidDirectory(directoryUri, fileName, base64) {
+  const baseName = fileName.replace(/\.pdf$/i, '');
+  const destUri = await StorageAccessFramework.createFileAsync(
+    directoryUri,
+    baseName,
+    'application/pdf',
+  );
+  await FileSystem.writeAsStringAsync(destUri, base64, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+}
+
+async function requestAndroidDownloadDirectory() {
+  const initialUri = StorageAccessFramework.getUriForDirectoryInRoot('Download');
+  const permissions = await StorageAccessFramework.requestDirectoryPermissionsAsync(initialUri);
+  if (!permissions.granted) {
+    throw new Error('DOWNLOAD_CANCELLED');
+  }
+  await AsyncStorage.setItem(DOWNLOAD_DIR_KEY, permissions.directoryUri);
+  return permissions.directoryUri;
+}
+
+async function savePdfToAndroidDownloads(pdfUri, fileName) {
+  const base64 = await FileSystem.readAsStringAsync(pdfUri, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+
+  let directoryUri = await AsyncStorage.getItem(DOWNLOAD_DIR_KEY);
+  if (directoryUri) {
+    try {
+      await writePdfToAndroidDirectory(directoryUri, fileName, base64);
+      return { location: 'Téléchargements', fileName };
+    } catch {
+      await AsyncStorage.removeItem(DOWNLOAD_DIR_KEY);
+      directoryUri = null;
+    }
+  }
+
+  directoryUri = await requestAndroidDownloadDirectory();
+  try {
+    await writePdfToAndroidDirectory(directoryUri, fileName, base64);
+  } catch {
+    const stampedName = fileName.replace(/\.pdf$/i, `-${Date.now()}.pdf`);
+    await writePdfToAndroidDirectory(directoryUri, stampedName, base64);
+    return { location: 'Téléchargements', fileName: stampedName };
+  }
+
+  return { location: 'Téléchargements', fileName };
+}
+
+async function savePdfToIosDocuments(pdfUri, fileName) {
+  const dest = `${FileSystem.documentDirectory}${fileName}`;
+  const existing = await FileSystem.getInfoAsync(dest);
+  if (existing.exists) {
+    await FileSystem.deleteAsync(dest, { idempotent: true });
+  }
+  await FileSystem.copyAsync({ from: pdfUri, to: dest });
+  return { location: 'Fichiers', fileName };
 }
 
 export async function downloadDocumentPdf(document, company) {
   const logoDataUri = await resolveLogoDataUri(company);
   const html = buildDocumentHtml(document, company, logoDataUri);
   const { uri } = await Print.printToFileAsync({ html });
-  const safeName = document.docNumber.replace(/[/\\?%*:|"<>]/g, '-');
-  const dest = `${FileSystem.documentDirectory}${safeName}.pdf`;
-  await FileSystem.copyAsync({ from: uri, to: dest });
+  await assertPdfReady(uri);
 
-  if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(dest, {
-      mimeType: 'application/pdf',
-      dialogTitle: `Télécharger ${document.docNumber}`,
-      UTI: 'com.adobe.pdf',
-    });
+  const fileName = sanitizePdfFileName(document.docNumber);
+
+  if (Platform.OS === 'android') {
+    return savePdfToAndroidDownloads(uri, fileName);
   }
-  return dest;
+
+  if (Platform.OS === 'ios') {
+    return savePdfToIosDocuments(uri, fileName);
+  }
+
+  const dest = `${FileSystem.cacheDirectory}${fileName}`;
+  await FileSystem.copyAsync({ from: uri, to: dest });
+  return { location: 'Cache', fileName };
 }

@@ -10,12 +10,12 @@ import { useTheme } from '../context/ThemeContext';
 import DocumentPaper from '../components/DocumentPaper';
 import { downloadDocumentPdf } from '../services/pdfService';
 import { sendDocumentEmail } from '../services/emailService';
-import { STATUS } from '../constants/document';
+import { STATUS, DOCUMENT_SEND_EMAIL } from '../constants/document';
 
 export default function PreviewScreen({ navigation, route }) {
   const {
     previewDocument, company, activeDocumentId,
-    updateDocumentStatus, getClientById, showToast, loadDocumentForEdit,
+    updateDocumentStatus, showToast, loadDocumentForEdit,
   } = useApp();
   const { colors, shared } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -24,7 +24,6 @@ export default function PreviewScreen({ navigation, route }) {
   const origin = route.params?.origin;
 
   const doc = previewDocument;
-  const client = doc.clientId ? getClientById(doc.clientId) : null;
   const statusCfg = STATUS[doc.status] || STATUS.pending;
   const isSaved = doc.id && doc.id !== 'draft';
 
@@ -35,9 +34,13 @@ export default function PreviewScreen({ navigation, route }) {
     }
     setLoading(true);
     try {
-      await downloadDocumentPdf(doc, company);
-      showToast('📥 PDF prêt à enregistrer', 'green');
-    } catch {
+      const { location, fileName } = await downloadDocumentPdf(doc, company);
+      showToast(`📥 ${fileName} enregistré dans ${location}`, 'green');
+    } catch (err) {
+      if (err?.message === 'DOWNLOAD_CANCELLED') {
+        showToast('Téléchargement annulé', 'yellow');
+        return;
+      }
       showToast('❌ Erreur lors du téléchargement', 'red');
     } finally {
       setLoading(false);
@@ -49,12 +52,8 @@ export default function PreviewScreen({ navigation, route }) {
       showToast('⚠️ Enregistrez le document d\'abord', 'red');
       return;
     }
-    if (!client?.email) {
-      showToast('⚠️ Aucun e-mail client disponible', 'red');
-      return;
-    }
     try {
-      await sendDocumentEmail(doc, company, client.email);
+      await sendDocumentEmail(doc, company, DOCUMENT_SEND_EMAIL);
       showToast('📧 Application e-mail ouverte', 'green');
     } catch {
       showToast('❌ Aucune application e-mail', 'red');

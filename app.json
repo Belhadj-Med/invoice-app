@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Ala App",
+    "name": "invoice Ghorbali",
     "slug": "ala-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -11,7 +11,11 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "fr.alaapp.mobile"
+      "bundleIdentifier": "fr.alaapp.mobile",
+      "infoPlist": {
+        "UIFileSharingEnabled": true,
+        "LSSupportsOpeningDocumentsInPlace": true
+      }
     },
     "android": {
       "adaptiveIcon": {
