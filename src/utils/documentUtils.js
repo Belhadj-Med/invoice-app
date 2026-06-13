@@ -1,26 +1,28 @@
-import { DOC_PREFIX, TVA_RATE } from '../constants/document';
+import { DOC_PREFIX, DEFAULT_TAX_RATE, DEFAULT_CURRENCY_SYMBOL, DEFAULT_CURRENCY_LOCALE } from '../constants/document';
 
-export function calcTotals(lineItems, docType) {
+export function calcTotals(lineItems, docType, taxRate = DEFAULT_TAX_RATE, discount = 0) {
   const ht = (lineItems || []).reduce((s, i) => s + (i.qty || 0) * (i.price || 0), 0);
+  const discountAmount = ht * (discount / 100);
+  const netHt = ht - discountAmount;
   if (docType === 'Avoir') {
-    return { ht, tva: 0, ttc: ht };
+    return { ht, discountAmount, tva: 0, ttc: netHt };
   }
-  const tva = ht * TVA_RATE;
-  return { ht, tva, ttc: ht + tva };
+  const tva = netHt * taxRate;
+  return { ht, discountAmount, tva, ttc: netHt + tva };
 }
 
-export function fmtCurrency(value) {
+export function fmtCurrency(value, symbol = DEFAULT_CURRENCY_SYMBOL, locale = DEFAULT_CURRENCY_LOCALE) {
   const n = Number(value) || 0;
   return (
-    n.toLocaleString('fr-TN', {
+    n.toLocaleString(locale, {
       minimumFractionDigits: 3,
       maximumFractionDigits: 3,
-    }) + ' DT'
+    }) + ' ' + symbol
   );
 }
 
-export function fmtCurrencyShort(value) {
-  return fmtCurrency(value).replace(' DT', '');
+export function fmtCurrencyShort(value, symbol = DEFAULT_CURRENCY_SYMBOL, locale = DEFAULT_CURRENCY_LOCALE) {
+  return fmtCurrency(value, symbol, locale).replace(` ${symbol}`, '');
 }
 
 export function fmtDateFR(isoOrDate) {
@@ -67,7 +69,7 @@ export function bumpCounter(counters, prefix, year, seq) {
 
 export function getClientStats(clientId, documents) {
   const docs = documents.filter(d => d.clientId === clientId);
-  const total = docs.reduce((s, d) => s + calcTotals(d.lineItems, d.docType).ttc, 0);
+  const total = docs.reduce((s, d) => s + calcTotals(d.lineItems, d.docType, DEFAULT_TAX_RATE, d.discount || 0).ttc, 0);
   return { count: docs.length, total };
 }
 
@@ -78,25 +80,36 @@ export function getDashboardStats(documents, clients, counters = {}) {
 
   const factures = documents.filter(d => d.docType === 'Facture');
 
-  // Revenue: prefer stored counters.revenues for accuracy, fall back to documents
+  function getDateKey(dateStr) {
+    const d = new Date(dateStr);
+    return { year: d.getFullYear(), month: d.getMonth() };
+  }
+
   const yearRevs = (counters.revenues && counters.revenues[thisYear]) || {};
-  const revenue = yearRevs[thisMonth] || factures
-    .filter(d => d.status === 'paid' && new Date(d.paidAt || d.updatedAt || d.createdAt).getMonth() === thisMonth && new Date(d.paidAt || d.updatedAt || d.createdAt).getFullYear() === thisYear)
-    .reduce((s, d) => s + calcTotals(d.lineItems, d.docType).ttc, 0);
+  const revenue = yearRevs[thisMonth] != null ? yearRevs[thisMonth] : factures
+    .filter(d => {
+      if (d.status !== 'paid') return false;
+      const { year, month } = getDateKey(d.paidAt || d.updatedAt || d.createdAt);
+      return year === thisYear && month === thisMonth;
+    })
+    .reduce((s, d) => s + calcTotals(d.lineItems, d.docType, DEFAULT_TAX_RATE, d.discount || 0).ttc, 0);
 
   const pendingCount = documents.filter(
     d => d.docType === 'Facture' && d.status === 'pending',
   ).length;
 
-  // Build monthly revenue for months from January up to current month
   const monthlyRevenue = Array.from({ length: thisMonth + 1 }, (_, m) => {
     const month = m;
     const monthName = new Date(thisYear, month, 1).toLocaleDateString('fr-TN', { month: 'short' });
     const total = (yearRevs[month] != null)
       ? yearRevs[month]
       : factures
-        .filter(doc => doc.status === 'paid' && new Date(doc.paidAt || doc.updatedAt || doc.createdAt).getMonth() === month)
-        .reduce((s, doc) => s + calcTotals(doc.lineItems, doc.docType).ttc, 0);
+        .filter(doc => {
+          if (doc.status !== 'paid') return false;
+          const { year, month: docMonth } = getDateKey(doc.paidAt || doc.updatedAt || doc.createdAt);
+          return year === thisYear && docMonth === month;
+        })
+        .reduce((s, doc) => s + calcTotals(doc.lineItems, doc.docType, DEFAULT_TAX_RATE, doc.discount || 0).ttc, 0);
     return { month: monthName, total, highlight: month === thisMonth };
   });
 

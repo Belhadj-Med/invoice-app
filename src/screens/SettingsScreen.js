@@ -6,7 +6,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
+import { useLanguage } from '../context/LanguageContext';
 import { openSupportEmail } from '../services/emailService';
+import { exportAllData } from '../services/exportService';
+import LanguagePicker from '../components/LanguagePicker';
 
 function ActionRow({ icon, iconColor, label, description, onPress, colors }) {
   return (
@@ -24,38 +27,52 @@ function ActionRow({ icon, iconColor, label, description, onPress, colors }) {
 }
 
 export default function SettingsScreen({ navigation }) {
-  const { showToast } = useApp();
+  const { showToast, clients, documents, company } = useApp();
   const { colors, shared, isLightMode, setLightMode } = useTheme();
+  const { t, language } = useLanguage();
   const localStyles = useMemo(() => createStyles(colors), [colors]);
 
   const handleSupport = async () => {
     try {
-      await openSupportEmail();
+      await openSupportEmail(language);
     } catch {
-      showToast('❌ Aucune application e-mail', 'red');
+      showToast(t('settings.noEmail'), 'red');
+    }
+  };
+
+  const handleExport = async () => {
+    try {
+      const result = await exportAllData(clients, documents, company);
+      if (result.success) {
+        showToast(t('settings.exportSuccess'), 'green');
+      } else {
+        showToast(result.message || t('settings.exportError'), 'red');
+      }
+    } catch {
+      showToast(t('settings.exportException'), 'red');
     }
   };
 
   return (
     <SafeAreaView style={shared.screen} edges={['top']}>
       <ScrollView contentContainerStyle={localStyles.content} showsVerticalScrollIndicator={false}>
-        <Text style={[shared.screenTitle, localStyles.title]}>Réglages</Text>
+        <Text style={[shared.screenTitle, localStyles.title]}>{t('settings.title')}</Text>
 
-        <Text style={[shared.sectionLabel, localStyles.sectionLabel]}>Apparence</Text>
+        <Text style={[shared.sectionLabel, localStyles.sectionLabel]}>{t('settings.appearance')}</Text>
         <View style={shared.card}>
           <View style={styles.settingRow}>
             <View style={[styles.settingIcon, { backgroundColor: colors.warm + '18' }]}>
               <Ionicons name="sunny-outline" size={16} color={colors.warm} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.settingLabel, { color: colors.text }]}>Mode clair</Text>
-              <Text style={[styles.settingDesc, { color: colors.text3 }]}>Interface claire et lumineuse</Text>
+              <Text style={[styles.settingLabel, { color: colors.text }]}>{t('settings.lightMode')}</Text>
+              <Text style={[styles.settingDesc, { color: colors.text3 }]}>{t('settings.lightDesc')}</Text>
             </View>
             <Switch
               value={isLightMode}
               onValueChange={(v) => {
                 setLightMode(v);
-                showToast(v ? '☀️ Mode clair activé' : '🌙 Mode sombre activé', 'purple');
+                showToast(v ? t('settings.lightToast') : t('settings.darkToast'), 'purple');
               }}
               trackColor={{ false: colors.surface3, true: colors.accent + '88' }}
               thumbColor={isLightMode ? colors.accent2 : colors.text3}
@@ -63,13 +80,18 @@ export default function SettingsScreen({ navigation }) {
           </View>
         </View>
 
-        <Text style={[shared.sectionLabel, localStyles.sectionLabel]}>Entreprise & documents</Text>
+        <Text style={[shared.sectionLabel, localStyles.sectionLabel]}>{t('settings.language')}</Text>
+        <View style={shared.card}>
+          <LanguagePicker variant="dropdown" />
+        </View>
+
+        <Text style={[shared.sectionLabel, localStyles.sectionLabel]}>{t('settings.company')}</Text>
         <View style={shared.card}>
           <ActionRow
             icon="business-outline"
             iconColor={colors.accent}
-            label="Informations entreprise"
-            description="Nom, adresse, MF, RIB — affichés sur les factures"
+            label={t('settings.companyInfo')}
+            description={t('settings.companyDesc')}
             colors={colors}
             onPress={() => navigation.navigate('CompanyInfo')}
           />
@@ -77,20 +99,32 @@ export default function SettingsScreen({ navigation }) {
           <ActionRow
             icon="document-text-outline"
             iconColor={colors.warm}
-            label="Modèles de documents"
-            description="Aperçu facture, devis et avoir"
+            label={t('settings.templates')}
+            description={t('settings.templatesDesc')}
             colors={colors}
             onPress={() => navigation.navigate('DocumentTemplates')}
           />
         </View>
 
-        <Text style={[shared.sectionLabel, localStyles.sectionLabel]}>Application</Text>
+        <Text style={[shared.sectionLabel, localStyles.sectionLabel]}>{t('settings.data')}</Text>
+        <View style={shared.card}>
+          <ActionRow
+            icon="download-outline"
+            iconColor={colors.accent3}
+            label={t('settings.export')}
+            description={t('settings.exportDesc')}
+            colors={colors}
+            onPress={handleExport}
+          />
+        </View>
+
+        <Text style={[shared.sectionLabel, localStyles.sectionLabel]}>{t('settings.app')}</Text>
         <View style={shared.card}>
           <ActionRow
             icon="help-circle-outline"
             iconColor={colors.text2}
-            label="Aide & support"
-            description="Contacter le support par e-mail"
+            label={t('settings.support')}
+            description={t('settings.supportDesc')}
             colors={colors}
             onPress={handleSupport}
           />
@@ -98,10 +132,10 @@ export default function SettingsScreen({ navigation }) {
           <ActionRow
             icon="information-circle-outline"
             iconColor={colors.text2}
-            label="À propos — v1.0.0"
-            description="Ala App — Facturation professionnelle"
+            label={t('settings.about', { ver: '1.0.0' })}
+            description={t('settings.aboutDesc')}
             colors={colors}
-            onPress={() => showToast('Ala App v1.0.0 — Facturation TN', 'purple')}
+            onPress={() => showToast(t('settings.aboutToast', { ver: '1.0.0' }), 'purple')}
           />
         </View>
       </ScrollView>

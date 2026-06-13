@@ -62,6 +62,7 @@ export function buildShared(colors) {
       letterSpacing: -0.5,
     },
     sectionLabel: {
+      marginTop: 10,
       fontSize: 10,
       fontWeight: '700',
       textTransform: 'uppercase',

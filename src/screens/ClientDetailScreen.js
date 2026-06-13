@@ -1,22 +1,23 @@
 import React, { useMemo, useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, Modal,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Modal, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
+import { useLanguage } from '../context/LanguageContext';
 import { STATUS, DOC_TYPES } from '../constants/document';
-import { calcTotals, fmtCurrency, fmtDateFR } from '../utils/documentUtils';
+import { fmtDateFR } from '../utils/documentUtils';
 import StatPill from '../components/StatPill';
 
-function StatusPicker({ visible, current, onSelect, onClose, colors }) {
+function StatusPicker({ visible, current, onSelect, onClose, colors, t }) {
   return (
     <Modal visible={visible} transparent animationType="fade">
       <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={onClose}>
         <View style={[styles.statusSheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Text style={[styles.statusTitle, { color: colors.text }]}>Modifier le statut</Text>
+          <Text style={[styles.statusTitle, { color: colors.text }]}>{t('clientDetail.changeStatus')}</Text>
           {Object.entries(STATUS).map(([key, cfg]) => (
             <TouchableOpacity
               key={key}
@@ -37,9 +38,11 @@ export default function ClientDetailScreen({ route, navigation }) {
   const { clientId } = route.params;
   const {
     getClientById, getClientDocuments, getClientDisplayStats,
-    updateDocumentStatus, openDocumentPreview, startNewDocument, deleteDocument,
+    updateDocumentStatus, openDocumentPreview, startNewDocument, deleteDocument, deleteClient, showToast,
+    calcTotals, fmtCurrency,
   } = useApp();
   const { colors, shared } = useTheme();
+  const { t } = useLanguage();
   const localStyles = useMemo(() => createStyles(colors), [colors]);
 
   const client = getClientById(clientId);
@@ -50,7 +53,7 @@ export default function ClientDetailScreen({ route, navigation }) {
   if (!client) {
     return (
       <SafeAreaView style={shared.screen}>
-        <Text style={{ color: colors.text, padding: 20 }}>Client introuvable</Text>
+        <Text style={{ color: colors.text, padding: 20 }}>{t('clientDetail.notFound')}</Text>
       </SafeAreaView>
     );
   }
@@ -59,7 +62,26 @@ export default function ClientDetailScreen({ route, navigation }) {
 
   const handleNewDoc = (docType) => {
     startNewDocument(clientId, docType);
-    navigation.getParent()?.navigate('Create');
+    navigation.getParent()?.getParent()?.navigate('CreateModal');
+  };
+
+  const handleDeleteClient = () => {
+    Alert.alert(
+      t('clients.deleteTitle'),
+      t('clients.deleteMessage', { name: client.name }),
+      [
+        { text: t('common.cancel'), onPress: () => {}, style: 'cancel' },
+        {
+          text: t('common.delete'),
+          onPress: () => {
+            deleteClient(clientId);
+            showToast(t('clients.deleted', { name: client.name }), 'purple');
+            navigation.goBack();
+          },
+          style: 'destructive',
+        },
+      ],
+    );
   };
 
   return (
@@ -69,6 +91,9 @@ export default function ClientDetailScreen({ route, navigation }) {
           <Ionicons name="arrow-back" size={16} color={colors.text2} />
         </TouchableOpacity>
         <Text style={shared.screenTitle} numberOfLines={1}>{client.name}</Text>
+        <TouchableOpacity style={localStyles.deleteClientBtn} onPress={handleDeleteClient}>
+          <Ionicons name="trash-outline" size={18} color={colors.danger} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={localStyles.content} showsVerticalScrollIndicator={false}>
@@ -78,15 +103,18 @@ export default function ClientDetailScreen({ route, navigation }) {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={localStyles.clientName}>{client.name}</Text>
+            {client.email ? <Text style={localStyles.clientMeta}>{client.email}</Text> : null}
+            {client.address ? <Text style={localStyles.clientMeta}>{client.address}</Text> : null}
+            {client.matriculeFiscal ? <Text style={localStyles.clientMeta}>{t('clientDetail.mf', { n: client.matriculeFiscal })}</Text> : null}
             <Text style={localStyles.clientMeta}>{client.phone || '—'}</Text>
           </View>
           <View style={localStyles.statsBox}>
             <Text style={localStyles.statsTotal}>{stats.total}</Text>
-            <Text style={localStyles.statsCount}>{stats.count} document{stats.count !== 1 ? 's' : ''}</Text>
+            <Text style={localStyles.statsCount}>{stats.count} {stats.count === 1 ? t('clientDetail.document') : t('clientDetail.documents')}</Text>
           </View>
         </View>
 
-        <Text style={[shared.sectionLabel, { marginBottom: 10 }]}>Nouveau document</Text>
+        <Text style={[shared.sectionLabel, { marginBottom: 10 }]}>{t('clientDetail.newDoc')}</Text>
         <View style={localStyles.docTypeRow}>
           {DOC_TYPES.map((type) => (
             <TouchableOpacity key={type} style={{ flex: 1 }} onPress={() => handleNewDoc(type)} activeOpacity={0.85}>
@@ -95,20 +123,20 @@ export default function ClientDetailScreen({ route, navigation }) {
                 style={localStyles.docTypeBtn}
               >
                 <Ionicons name="add" size={14} color="white" />
-                <Text style={localStyles.docTypeBtnText}>{type}</Text>
+                <Text style={localStyles.docTypeBtnText}>{t('docType.' + type.toLowerCase())}</Text>
               </LinearGradient>
             </TouchableOpacity>
           ))}
         </View>
 
         <Text style={[shared.sectionLabel, { marginTop: 20, marginBottom: 10 }]}>
-          Documents ({docs.length})
+          {t('clientDetail.docSection')} ({docs.length})
         </Text>
 
         {docs.length === 0 ? (
           <View style={localStyles.empty}>
             <Ionicons name="document-outline" size={36} color={colors.text3} />
-            <Text style={{ color: colors.text3, marginTop: 8 }}>Aucun document pour ce client</Text>
+            <Text style={{ color: colors.text3, marginTop: 8 }}>{t('clientDetail.empty')}</Text>
           </View>
         ) : (
           <View style={shared.card}>
@@ -132,7 +160,7 @@ export default function ClientDetailScreen({ route, navigation }) {
                       <View style={{ flex: 1 }}>
                         <Text style={localStyles.docNum}>{doc.docNumber}</Text>
                         <Text style={localStyles.docMeta}>
-                          {doc.docType} · {fmtDateFR(doc.createdAt)}
+                          {t('docType.' + doc.docType.toLowerCase())} · {fmtDateFR(doc.createdAt)}
                         </Text>
                       </View>
                       <Text style={localStyles.docAmount}>{fmtCurrency(ttc)}</Text>
@@ -167,6 +195,7 @@ export default function ClientDetailScreen({ route, navigation }) {
         onSelect={(status) => updateDocumentStatus(statusDocId, status)}
         onClose={() => setStatusDocId(null)}
         colors={colors}
+        t={t}
       />
     </SafeAreaView>
   );
@@ -202,6 +231,10 @@ const createStyles = (colors) => StyleSheet.create({
     gap: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
+  },
+  deleteClientBtn: {
+    marginLeft: 'auto',
+    padding: 8,
   },
   content: { padding: 16, paddingBottom: 110 },
   profileCard: {

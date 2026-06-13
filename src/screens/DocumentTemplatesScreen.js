@@ -6,34 +6,36 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
+import { useLanguage } from '../context/LanguageContext';
 import DocumentPaper from '../components/DocumentPaper';
-
-const TEMPLATES = [
-  { type: 'Facture', icon: 'receipt-outline', desc: 'Facture avec TVA 19%' },
-  { type: 'Devis', icon: 'document-outline', desc: 'Devis avec TVA 19%' },
-  { type: 'Avoir', icon: 'return-down-back-outline', desc: 'Avoir sans TVA' },
-];
-
-const SAMPLE_DOC = (type) => ({
-  id: 'template',
-  docType: type,
-  docNumber: `${type === 'Facture' ? 'FACT' : type === 'Devis' ? 'DEVI' : 'AVOI'}-2026-001`,
-  clientName: 'Client Exemple SARL',
-  dueDate: new Date().toISOString().slice(0, 10),
-  notes: 'Paiement par virement sous 30 jours.',
-  createdAt: new Date().toISOString(),
-  lineItems: [
-    { id: 1, desc: 'Prestation de service', qty: 1, price: 500 },
-    { id: 2, desc: 'Consultation', qty: 2, price: 150 },
-  ],
-  status: 'pending',
-});
 
 export default function DocumentTemplatesScreen({ navigation }) {
   const { company } = useApp();
   const { colors, shared } = useTheme();
+  const { t } = useLanguage();
   const localStyles = useMemo(() => createStyles(colors), [colors]);
   const [expanded, setExpanded] = React.useState(null);
+
+  const TEMPLATES = useMemo(() => [
+    { type: 'Facture', icon: 'receipt-outline', desc: t('templates.invoice') },
+    { type: 'Devis', icon: 'document-outline', desc: t('templates.quote') },
+    { type: 'Avoir', icon: 'return-down-back-outline', desc: t('templates.creditNote') },
+  ], [t]);
+
+  const getSampleDoc = useMemo(() => (type) => ({
+    id: 'template',
+    docType: type,
+    docNumber: `${type === 'Facture' ? 'FACT' : type === 'Devis' ? 'DEVI' : 'AVOI'}-2026-001`,
+    clientName: t('templates.sampleClient'),
+    dueDate: new Date().toISOString().slice(0, 10),
+    notes: t('templates.sampleNotes'),
+    createdAt: new Date().toISOString(),
+    lineItems: [
+      { id: 1, desc: t('templates.sampleService'), qty: 1, price: 500 },
+      { id: 2, desc: t('templates.sampleConsulting'), qty: 2, price: 150 },
+    ],
+    status: 'pending',
+  }), [t]);
 
   return (
     <SafeAreaView style={shared.screen} edges={['top']}>
@@ -41,12 +43,12 @@ export default function DocumentTemplatesScreen({ navigation }) {
         <TouchableOpacity style={shared.backBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={16} color={colors.text2} />
         </TouchableOpacity>
-        <Text style={shared.screenTitle}>Modèles de documents</Text>
+        <Text style={shared.screenTitle}>{t('templates.title')}</Text>
       </View>
 
       <ScrollView contentContainerStyle={localStyles.content} showsVerticalScrollIndicator={false}>
         <Text style={[shared.sectionLabel, { marginBottom: 14 }]}>
-          Aperçu des modèles utilisés pour vos documents
+          {t('templates.desc')}
         </Text>
 
         {TEMPLATES.map((tpl) => (
@@ -60,7 +62,7 @@ export default function DocumentTemplatesScreen({ navigation }) {
                 <Ionicons name={tpl.icon} size={20} color={colors.accent2} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[localStyles.tplTitle, { color: colors.text }]}>{tpl.type}</Text>
+                <Text style={[localStyles.tplTitle, { color: colors.text }]}>{t('docType.' + tpl.type.toLowerCase())}</Text>
                 <Text style={{ color: colors.text3, fontSize: 11 }}>{tpl.desc}</Text>
               </View>
               <Ionicons
@@ -72,7 +74,7 @@ export default function DocumentTemplatesScreen({ navigation }) {
 
             {expanded === tpl.type && (
               <View style={localStyles.previewWrap}>
-                <DocumentPaper document={SAMPLE_DOC(tpl.type)} company={company} />
+                <DocumentPaper document={getSampleDoc(tpl.type)} company={company} />
               </View>
             )}
           </View>

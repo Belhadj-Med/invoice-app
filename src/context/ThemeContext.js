@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getTheme } from '../theme';
 
 const ThemeContext = createContext(null);
-const THEME_KEY = '@ala_light_mode';
+const THEME_KEY = '@invoice_creator_light_mode';
 
 export function ThemeProvider({ children }) {
   const [isLightMode, setIsLightMode] = useState(false);

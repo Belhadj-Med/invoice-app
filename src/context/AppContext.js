@@ -3,12 +3,15 @@ import React, {
 } from 'react';
 import {
   CLIENT_COLORS, DEFAULT_COMPANY, defaultStatusForType,
+  DEFAULT_TAX_RATE, DEFAULT_CURRENCY_SYMBOL, DEFAULT_CURRENCY_LOCALE,
 } from '../constants/document';
 import {
   loadAppData, saveClients, saveDocuments, saveCompany, saveCounters,
+  isOnboardingComplete, saveOnboardingComplete,
 } from '../services/storage';
+import { useLanguage } from './LanguageContext';
 import {
-  calcTotals, fmtCurrency, fmtDateISO, nextDocNumber, bumpCounter,
+  calcTotals as calcTotalsRaw, fmtCurrency as fmtCurrencyRaw, fmtDateISO, nextDocNumber, bumpCounter,
   getClientStats, getDashboardStats,
 } from '../utils/documentUtils';
 
@@ -26,11 +29,13 @@ const EMPTY_DRAFT = () => ({
 });
 
 export function AppProvider({ children }) {
+  const { t } = useLanguage();
   const [ready, setReady] = useState(false);
   const [clients, setClients] = useState([]);
   const [documents, setDocuments] = useState([]);
   const [company, setCompanyState] = useState(DEFAULT_COMPANY);
   const [counters, setCounters] = useState({});
+  const [onboardingComplete, setOnboardingComplete] = useState(false);
 
   const [draft, setDraft] = useState(EMPTY_DRAFT);
   const [activeDocumentId, setActiveDocumentId] = useState(null);
@@ -40,11 +45,15 @@ export function AppProvider({ children }) {
   const toastTimer = useRef(null);
 
   useEffect(() => {
-    loadAppData().then((data) => {
+    Promise.all([
+      loadAppData(),
+      isOnboardingComplete(),
+    ]).then(([data, onboarded]) => {
       setClients(data.clients);
       setDocuments(data.documents);
       setCompanyState(data.company);
       setCounters(data.counters);
+      setOnboardingComplete(onboarded);
       const { docNumber, seq, year, prefix } = nextDocNumber('Facture', data.counters);
       setDraft({
         ...EMPTY_DRAFT(),
@@ -88,6 +97,11 @@ export function AppProvider({ children }) {
     setCompanyState(prev => ({ ...prev, ...updates }));
   }, []);
 
+  const completeOnboarding = useCallback(async () => {
+    await saveOnboardingComplete();
+    setOnboardingComplete(true);
+  }, []);
+
   const addClient = useCallback((client) => {
     const newClient = {
       ...client,
@@ -108,9 +122,36 @@ export function AppProvider({ children }) {
   }, []);
 
   const deleteClient = useCallback((id) => {
+    setDocuments(prev => {
+      // Find all documents for this client
+      const clientDocs = prev.filter(d => d.clientId === id);
+      
+      // Subtract revenue from paid invoices
+      clientDocs.forEach(doc => {
+        if (doc.status === 'paid') {
+          const paidDate = doc.paidAt ? new Date(doc.paidAt) : new Date(doc.updatedAt || doc.createdAt);
+          const year = paidDate.getFullYear();
+          const month = paidDate.getMonth();
+          const sub = calcTotalsRaw(doc.lineItems, doc.docType, company.taxRate || DEFAULT_TAX_RATE).ttc;
+          setCounters(prevCounters => {
+            const prevRevs = prevCounters.revenues || {};
+            const yearRevs = { ...(prevRevs[year] || {}) };
+            yearRevs[month] = Math.max(0, (yearRevs[month] || 0) - sub);
+            return {
+              ...prevCounters,
+              revenues: { ...prevRevs, [year]: yearRevs },
+            };
+          });
+        }
+      });
+      
+      // Remove all documents for this client
+      return prev.filter(d => d.clientId !== id);
+    });
+    
+    // Remove the client
     setClients(prev => prev.filter(c => c.id !== id));
-    setDocuments(prev => prev.filter(d => d.clientId !== id));
-  }, []);
+  }, [company.taxRate]);
 
   const getClientById = useCallback(
     (id) => clients.find(c => c.id === id),
@@ -179,6 +220,7 @@ export function AppProvider({ children }) {
       notes: company.defaultNotes || DEFAULT_COMPANY.defaultNotes,
       lineItems: [{ id: 1, desc: '', qty: 1, price: 0 }],
       nextLineId: 2,
+      discount: 0,
       _pendingCounter: { prefix, year, seq },
     });
     return docNumber;
@@ -199,6 +241,7 @@ export function AppProvider({ children }) {
       notes: doc.notes,
       lineItems: doc.lineItems,
       nextLineId: maxLineId + 1,
+      discount: doc.discount || 0,
     });
   }, [documents]);
 
@@ -242,11 +285,11 @@ export function AppProvider({ children }) {
 
   const saveDocument = useCallback(() => {
     if (!draft.clientName?.trim()) {
-      showToast('⚠️ Nom du client requis', 'red');
+      showToast(t('app.clientRequired'), 'red');
       return null;
     }
     if (!draft.lineItems.some(i => i.desc?.trim() && i.price > 0)) {
-      showToast('⚠️ Ajoutez au moins une prestation', 'red');
+      showToast(t('app.lineItemRequired'), 'red');
       return null;
     }
 
@@ -272,6 +315,7 @@ export function AppProvider({ children }) {
                 dueDate: draft.dueDate,
                 notes: draft.notes,
                 lineItems: draft.lineItems,
+                discount: draft.discount || 0,
                 updatedAt: now,
               }
             : d,
@@ -280,7 +324,7 @@ export function AppProvider({ children }) {
       saved = editingDocumentId;
       setActiveDocumentId(editingDocumentId);
       setEditingDocumentId(null);
-      showToast('✅ Document mis à jour', 'green');
+      showToast(t('app.docUpdated'), 'green');
     } else {
       const id = String(Date.now());
       const newDoc = {
@@ -292,6 +336,7 @@ export function AppProvider({ children }) {
         dueDate: draft.dueDate,
         notes: draft.notes,
         lineItems: draft.lineItems,
+        discount: draft.discount || 0,
         status: defaultStatusForType(draft.docType),
         createdAt: now,
         updatedAt: now,
@@ -299,7 +344,7 @@ export function AppProvider({ children }) {
       setDocuments(prev => [newDoc, ...prev]);
       saved = id;
       setActiveDocumentId(id);
-      showToast('✅ Document enregistré', 'green');
+      showToast(t('app.docSaved'), 'green');
 
       setCounters(prevCounters => {
         const updated = draft._pendingCounter
@@ -332,7 +377,7 @@ export function AppProvider({ children }) {
           setCounters(prevCounters => {
             const year = new Date().getFullYear();
             const month = new Date().getMonth();
-            const add = calcTotals(d.lineItems, d.docType).ttc;
+            const add = calcTotalsRaw(d.lineItems, d.docType, company.taxRate || DEFAULT_TAX_RATE, d.discount || 0).ttc;
             const prevRevs = prevCounters.revenues || {};
             const yearRevs = { ...(prevRevs[year] || {}) };
             yearRevs[month] = (yearRevs[month] || 0) + add;
@@ -347,7 +392,7 @@ export function AppProvider({ children }) {
           const paidDate = d.paidAt ? new Date(d.paidAt) : new Date(d.updatedAt || d.createdAt);
           const year = paidDate.getFullYear();
           const month = paidDate.getMonth();
-          const sub = calcTotals(d.lineItems, d.docType).ttc;
+            const sub = calcTotalsRaw(d.lineItems, d.docType, company.taxRate || DEFAULT_TAX_RATE, d.discount || 0).ttc;
           setCounters(prevCounters => {
             const prevRevs = prevCounters.revenues || {};
             const yearRevs = { ...(prevRevs[year] || {}) };
@@ -362,8 +407,8 @@ export function AppProvider({ children }) {
         return updated;
       }),
     );
-    showToast('✅ Statut mis à jour', 'green');
-  }, [showToast]);
+    showToast(t('app.statusUpdated'), 'green');
+  }, [showToast, company.taxRate]);
 
   const deleteDocument = useCallback((documentId) => {
     setDocuments(prev => {
@@ -372,7 +417,7 @@ export function AppProvider({ children }) {
         const paidDate = toDelete.paidAt ? new Date(toDelete.paidAt) : new Date(toDelete.updatedAt || toDelete.createdAt);
         const year = paidDate.getFullYear();
         const month = paidDate.getMonth();
-        const sub = calcTotals(toDelete.lineItems, toDelete.docType).ttc;
+        const sub = calcTotalsRaw(toDelete.lineItems, toDelete.docType, company.taxRate || DEFAULT_TAX_RATE, toDelete.discount || 0).ttc;
         setCounters(prevCounters => {
           const prevRevs = prevCounters.revenues || {};
           const yearRevs = { ...(prevRevs[year] || {}) };
@@ -386,8 +431,8 @@ export function AppProvider({ children }) {
       return prev.filter(d => d.id !== documentId);
     });
     if (activeDocumentId === documentId) setActiveDocumentId(null);
-    showToast('🗑️ Document supprimé', 'purple');
-  }, [activeDocumentId, showToast]);
+    showToast(t('app.docDeleted'), 'purple');
+  }, [activeDocumentId, showToast, company.taxRate]);
 
   const openDocumentPreview = useCallback((documentId) => {
     setActiveDocumentId(documentId);
@@ -404,11 +449,11 @@ export function AppProvider({ children }) {
       const stats = getClientStats(clientId, documents);
       return {
         count: stats.count,
-        total: fmtCurrency(stats.total),
+        total: fmtCurrencyRaw(stats.total, company.currencySymbol || DEFAULT_CURRENCY_SYMBOL, company.currencyLocale || DEFAULT_CURRENCY_LOCALE),
         totalRaw: stats.total,
       };
     },
-    [documents],
+    [documents, company.currencySymbol, company.currencyLocale],
   );
 
   if (!ready) return null;
@@ -447,9 +492,11 @@ export function AppProvider({ children }) {
         deleteDocument,
         openDocumentPreview,
         setActiveDocumentId,
-        calcTotals,
-        fmtCurrency,
+        calcTotals: (lineItems, docType) => calcTotalsRaw(lineItems, docType, company.taxRate || DEFAULT_TAX_RATE, draft.discount || 0),
+        fmtCurrency: (value) => fmtCurrencyRaw(value, company.currencySymbol || DEFAULT_CURRENCY_SYMBOL, company.currencyLocale || DEFAULT_CURRENCY_LOCALE),
         showToast,
+        onboardingComplete,
+        completeOnboarding,
       }}
     >
       {children}

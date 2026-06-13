@@ -1,42 +1,52 @@
 import React, { useState, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
-  StyleSheet, Modal, KeyboardAvoidingView, Platform,
+  StyleSheet, Modal, KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
+import { useLanguage } from '../context/LanguageContext';
 
-function ClientRow({ client, onSelect, styles, colors, stats }) {
+function ClientRow({ client, onSelect, onDelete, styles, colors, stats, t }) {
   const initials = client.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
   return (
-    <TouchableOpacity style={styles.clientRow} onPress={onSelect} activeOpacity={0.7}>
-      <View style={[styles.avatar, { backgroundColor: client.color + '22' }]}>
-        <Text style={[styles.avatarText, { color: client.color }]}>{initials}</Text>
-      </View>
-      <View style={styles.clientInfo}>
-        <Text style={styles.clientName} numberOfLines={1}>{client.name}</Text>
-        <Text style={styles.clientMeta} numberOfLines={1}>{client.phone || '—'}</Text>
-      </View>
-      <View style={styles.clientStats}>
-        <Text style={styles.clientTotal}>{stats.total}</Text>
-        <Text style={styles.clientInvoices}>{stats.count} doc.</Text>
-      </View>
-      <Ionicons name="chevron-forward" size={14} color={colors.text3} />
-    </TouchableOpacity>
+    <View style={styles.clientRowWrapper}>
+      <TouchableOpacity style={styles.clientRow} onPress={onSelect} activeOpacity={0.7}>
+        <View style={[styles.avatar, { backgroundColor: client.color + '22' }]}>
+          <Text style={[styles.avatarText, { color: client.color }]}>{initials}</Text>
+        </View>
+        <View style={styles.clientInfo}>
+          <Text style={styles.clientName} numberOfLines={1}>{client.name}</Text>
+          <Text style={styles.clientMeta} numberOfLines={1}>{client.phone || '—'}</Text>
+        </View>
+        <View style={styles.clientStats}>
+          <Text style={styles.clientTotal}>{stats.total}</Text>
+          <Text style={styles.clientInvoices}>{t('clients.docCount', { n: stats.count })}</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={14} color={colors.text3} />
+      </TouchableOpacity>
+      <TouchableOpacity style={[styles.deleteBtn, { backgroundColor: colors.danger + '15' }]} onPress={onDelete} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <Ionicons name="trash-outline" size={16} color={colors.danger} />
+      </TouchableOpacity>
+    </View>
   );
 }
 
 export default function ClientsScreen({ navigation }) {
-  const { clients, addClient, getClientDisplayStats, showToast } = useApp();
+  const { clients, addClient, deleteClient, getClientDisplayStats, showToast } = useApp();
   const { colors, shared } = useTheme();
+  const { t } = useLanguage();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [search, setSearch] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
   const [newName, setNewName] = useState('');
   const [newPhone, setNewPhone] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newAddress, setNewAddress] = useState('');
+  const [newMatricule, setNewMatricule] = useState('');
 
   const filtered = clients.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -45,23 +55,47 @@ export default function ClientsScreen({ navigation }) {
 
   const handleAdd = () => {
     if (!newName.trim()) {
-      showToast('⚠️ Le nom est requis', 'red');
+      showToast(t('clients.nameRequired'), 'red');
       return;
     }
     const client = addClient({
       name: newName.trim(),
       phone: newPhone.trim() || '',
+      email: newEmail.trim() || '',
+      address: newAddress.trim() || '',
+      matriculeFiscal: newMatricule.trim() || '',
     });
-    showToast(`✅ Client ajouté : ${client.name}`, 'green');
+    showToast(t('clients.added', { name: client.name }), 'green');
     setNewName('');
     setNewPhone('');
+    setNewEmail('');
+    setNewAddress('');
+    setNewMatricule('');
     setModalVisible(false);
+  };
+
+  const handleDeleteClient = (clientId, clientName) => {
+    Alert.alert(
+      t('clients.deleteTitle'),
+      t('clients.deleteMessage', { name: clientName }),
+      [
+        { text: t('common.cancel'), onPress: () => {}, style: 'cancel' },
+        {
+          text: t('common.delete'),
+          onPress: () => {
+            deleteClient(clientId);
+            showToast(t('clients.deleted', { name: clientName }), 'purple');
+          },
+          style: 'destructive',
+        },
+      ],
+    );
   };
 
   return (
     <SafeAreaView style={shared.screen} edges={['top']}>
       <View style={styles.header}>
-        <Text style={shared.screenTitle}>Clients</Text>
+        <Text style={shared.screenTitle}>{t('clients.title')}</Text>
         <TouchableOpacity style={styles.addBtn} onPress={() => setModalVisible(true)} activeOpacity={0.85}>
           <LinearGradient colors={[colors.accent, colors.accent2]} style={styles.addBtnGradient}>
             <Ionicons name="add" size={18} color="white" />
@@ -75,7 +109,7 @@ export default function ClientsScreen({ navigation }) {
           style={styles.searchInput}
           value={search}
           onChangeText={setSearch}
-          placeholder="Rechercher un client…"
+          placeholder={t('clients.search')}
           placeholderTextColor={colors.text3}
         />
         {search.length > 0 && (
@@ -86,7 +120,7 @@ export default function ClientsScreen({ navigation }) {
       </View>
 
       <Text style={[shared.sectionLabel, styles.countLabel]}>
-        {filtered.length} client{filtered.length !== 1 ? 's' : ''}
+        {filtered.length === 1 ? t('clients.count', { n: filtered.length }) : t('clients.countPlural', { n: filtered.length })}
       </Text>
 
       <ScrollView contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled">
@@ -97,8 +131,10 @@ export default function ClientsScreen({ navigation }) {
                 client={client}
                 stats={getClientDisplayStats(client.id)}
                 onSelect={() => navigation.navigate('ClientDetail', { clientId: client.id })}
+                onDelete={() => handleDeleteClient(client.id, client.name)}
                 styles={styles}
                 colors={colors}
+                t={t}
               />
               {index < filtered.length - 1 && <View style={styles.divider} />}
             </React.Fragment>
@@ -106,7 +142,7 @@ export default function ClientsScreen({ navigation }) {
           {filtered.length === 0 && (
             <View style={styles.empty}>
               <Ionicons name="people-outline" size={32} color={colors.text3} />
-              <Text style={styles.emptyText}>Aucun client trouvé</Text>
+              <Text style={styles.emptyText}>{t('clients.empty')}</Text>
             </View>
           )}
         </View>
@@ -116,22 +152,34 @@ export default function ClientsScreen({ navigation }) {
         <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.modalSheet}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Nouveau client</Text>
+              <Text style={styles.modalTitle}>{t('clients.newClient')}</Text>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
                 <Ionicons name="close" size={20} color={colors.text2} />
               </TouchableOpacity>
             </View>
             <View style={styles.inputWrap}>
-              <Text style={shared.inputLabel}>Nom complet *</Text>
+              <Text style={shared.inputLabel}>{t('clients.nameLabel')}</Text>
               <TextInput style={shared.inputField} value={newName} onChangeText={setNewName} placeholder="Nom du client" placeholderTextColor={colors.text3} />
             </View>
             <View style={styles.inputWrap}>
-              <Text style={shared.inputLabel}>Téléphone</Text>
-              <TextInput style={shared.inputField} value={newPhone} onChangeText={setNewPhone} placeholder="Téléphone" placeholderTextColor={colors.text3} keyboardType="phone-pad" />
+              <Text style={shared.inputLabel}>{t('clients.phoneLabel')}</Text>
+              <TextInput style={shared.inputField} value={newPhone} onChangeText={setNewPhone} placeholder={t('clients.phoneLabel')} placeholderTextColor={colors.text3} keyboardType="phone-pad" />
+            </View>
+            <View style={styles.inputWrap}>
+              <Text style={shared.inputLabel}>{t('clients.emailLabel')}</Text>
+              <TextInput style={shared.inputField} value={newEmail} onChangeText={setNewEmail} placeholder={t('clients.emailLabel')} placeholderTextColor={colors.text3} keyboardType="email-address" autoCapitalize="none" />
+            </View>
+            <View style={styles.inputWrap}>
+              <Text style={shared.inputLabel}>{t('clients.addressLabel')}</Text>
+              <TextInput style={shared.inputField} value={newAddress} onChangeText={setNewAddress} placeholder={t('clients.addressLabel')} placeholderTextColor={colors.text3} />
+            </View>
+            <View style={styles.inputWrap}>
+              <Text style={shared.inputLabel}>{t('clients.matriculeLabel')}</Text>
+              <TextInput style={shared.inputField} value={newMatricule} onChangeText={setNewMatricule} placeholder={t('clients.matriculeLabel')} placeholderTextColor={colors.text3} />
             </View>
             <TouchableOpacity onPress={handleAdd} activeOpacity={0.85}>
               <LinearGradient colors={[colors.accent, colors.accent2]} style={styles.modalBtn}>
-                <Text style={styles.modalBtnText}>Ajouter le client</Text>
+                <Text style={styles.modalBtnText}>{t('clients.addButton')}</Text>
               </LinearGradient>
             </TouchableOpacity>
           </View>
@@ -149,7 +197,8 @@ const createStyles = (colors) => StyleSheet.create({
   searchInput: { flex: 1, color: colors.text, fontSize: 13, paddingVertical: 11 },
   countLabel: { paddingHorizontal: 16, marginBottom: 10 },
   list: { paddingHorizontal: 16, paddingBottom: 110 },
-  clientRow: { flexDirection: 'row', alignItems: 'center', padding: 14, paddingHorizontal: 16, gap: 12 },
+  clientRowWrapper: { flexDirection: 'row', alignItems: 'center', paddingRight: 8 },
+  clientRow: { flex: 1, flexDirection: 'row', alignItems: 'center', padding: 14, paddingHorizontal: 16, gap: 12 },
   avatar: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontWeight: '800', fontSize: 13 },
   clientInfo: { flex: 1, minWidth: 0 },
@@ -158,6 +207,7 @@ const createStyles = (colors) => StyleSheet.create({
   clientStats: { alignItems: 'flex-end', marginRight: 4 },
   clientTotal: { fontSize: 11, fontWeight: '700', color: colors.text },
   clientInvoices: { fontSize: 9, color: colors.text3, marginTop: 2 },
+  deleteBtn: { borderRadius: 8, padding: 8, marginRight: 8 },
   divider: { height: 1, backgroundColor: colors.border, marginHorizontal: 16 },
   empty: { alignItems: 'center', padding: 40, gap: 10 },
   emptyText: { fontSize: 13, color: colors.text3 },

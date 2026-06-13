@@ -6,13 +6,14 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../context/ThemeContext';
+import { useLanguage } from '../context/LanguageContext';
 
-const TABS = [
-  { name: 'Dashboard', label: 'Accueil',  icon: 'home',                  lib: 'Ionicons' },
-  { name: 'Clients',   label: 'Clients',  icon: 'people',                lib: 'Ionicons' },
-  { name: 'Create',    label: '',          icon: 'add',                   lib: 'Ionicons', isFab: true },
-  { name: 'Preview',   label: 'Aperçu',   icon: 'document-text-outline', lib: 'Ionicons' },
-  { name: 'Settings',  label: 'Réglages', icon: 'settings-outline',      lib: 'Ionicons' },
+const getTabs = (t) => [
+  { name: 'Dashboard', label: t('tabBar.home'),    icon: 'home',                  lib: 'Ionicons' },
+  { name: 'Clients',   label: t('tabBar.clients'), icon: 'people',                lib: 'Ionicons' },
+  { name: 'CreateModal', label: '',                   icon: 'add',                   lib: 'Ionicons', isFab: true },
+  { name: 'Preview',   label: t('tabBar.preview'), icon: 'document-text-outline', lib: 'Ionicons' },
+  { name: 'Settings',  label: t('tabBar.settings'),icon: 'settings-outline',      lib: 'Ionicons' },
 ];
 
 function TabIcon({ lib, name, size, color }) {
@@ -25,7 +26,9 @@ function TabIcon({ lib, name, size, color }) {
 export default function CustomTabBar({ state, navigation }) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { t } = useLanguage();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const TABS = useMemo(() => getTabs(t), [t]);
 
   return (
     <View
@@ -35,7 +38,7 @@ export default function CustomTabBar({ state, navigation }) {
       ]}
     >
       {TABS.map((tab, index) => {
-        const isFocused = state.index === index;
+        const isFocused = state.routes[state.index]?.name === tab.name;
 
         const onPress = () => {
           const event = navigation.emit({

@@ -1,11 +1,11 @@
-import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Print from 'expo-print';
 import * as FileSystem from 'expo-file-system';
-import { Asset } from 'expo-asset';
-import { calcTotals, fmtCurrency, fmtDateFR } from '../utils/documentUtils';
+import { Platform } from 'react-native';
+import { calcTotals as calcTotalsRaw, fmtCurrency as fmtCurrencyRaw, fmtDateFR } from '../utils/documentUtils';
+import T from '../i18n/translations';
 
-const DOWNLOAD_DIR_KEY = '@ala_download_dir_uri';
+const DOWNLOAD_DIR_KEY = '@invoice_creator_download_dir_uri';
 const { StorageAccessFramework } = FileSystem;
 
 function escapeHtml(text) {
@@ -16,27 +16,46 @@ function escapeHtml(text) {
     .replace(/"/g, '&quot;');
 }
 
-export function buildDocumentHtml(document, company, logoDataUri) {
-  const { ht, tva, ttc } = calcTotals(document.lineItems, document.docType);
+function interp(str, params) {
+  if (!params) return str;
+  return Object.entries(params).reduce(
+    (s, [k, v]) => s.replace(new RegExp(`\\{${k}\\}`, 'g'), v != null ? String(v) : ''),
+    str,
+  );
+}
+
+function tr(key, lang, params) {
+  const entry = T[key];
+  if (!entry) return key;
+  return interp(entry[lang] || entry.fr || key, params);
+}
+
+export function buildDocumentHtml(document, company, logoDataUri, client, lang = 'fr') {
+  const taxRate = company.taxRate || 0.19;
+  const symbol = company.currencySymbol || 'DT';
+  const locale = company.currencyLocale || 'fr-TN';
+  const discount = document.discount || 0;
+  const { ht, discountAmount, tva, ttc } = calcTotalsRaw(document.lineItems, document.docType, taxRate, discount);
   const isAvoir = document.docType === 'Avoir';
+  const fmt = (v) => fmtCurrencyRaw(v, symbol, locale);
   const rows = (document.lineItems || [])
     .map(
       item => `
       <tr>
         <td>${escapeHtml(item.desc)}</td>
         <td style="text-align:center">${item.qty}</td>
-        <td style="text-align:right">${Number(item.price).toFixed(3)} DT</td>
-        <td style="text-align:right;font-weight:700">${(item.qty * item.price).toFixed(3)} DT</td>
+        <td style="text-align:right">${Number(item.price).toFixed(3)} ${symbol}</td>
+        <td style="text-align:right;font-weight:700">${(item.qty * item.price).toFixed(3)} ${symbol}</td>
       </tr>`,
     )
     .join('');
 
   const tvaBlock = isAvoir
     ? ''
-    : `<tr><td>TVA (19%)</td><td style="text-align:right">${fmtCurrency(tva)}</td></tr>`;
+    : `<tr><td>${tr('docPaper.tva', lang, { rate: (taxRate * 100).toFixed(0) })}</td><td style="text-align:right">${fmt(tva)}</td></tr>`;
 
   const logoHtml = logoDataUri
-    ? `<img src="${logoDataUri}" style="width:64px;height:64px;border-radius:8px;object-fit:contain;margin-right:8px"/>`
+    ? `<img src="${logoDataUri}" style="width:60px;height:60px;border-radius:8px;object-fit:contain;margin-right:8px;display:block"/>`
     : '';
 
   return `<!DOCTYPE html>
@@ -72,72 +91,59 @@ export function buildDocumentHtml(document, company, logoDataUri) {
       </div>
     </div>
     <div>
-      <div class="doc-type">${escapeHtml(document.docType)}</div>
+      <div class="doc-type">${escapeHtml(tr('docType.' + document.docType.toLowerCase(), lang))}</div>
       <div style="text-align:right;font-weight:600;margin-top:4px">N° ${escapeHtml(document.docNumber)}</div>
     </div>
   </div>
   <div class="divider"></div>
   <div class="parties">
     <div class="party">
-      <div class="party-label">Émetteur</div>
+      <div class="party-label">${tr('docPaper.emitter', lang)}</div>
       <strong>${escapeHtml(company.legalName)}</strong><br/>
       ${escapeHtml(company.address)}<br/>
       ${escapeHtml(company.postalCode)} ${escapeHtml(company.city)}, ${escapeHtml(company.country)}<br/>
-      MF: ${escapeHtml(company.matriculeFiscal)}<br/>
-      Tél: ${escapeHtml(company.phone)}<br/>
+      ${tr('docPaper.mf', lang, { n: escapeHtml(company.matriculeFiscal) })}<br/>
+      ${tr('docPaper.tel', lang, { n: escapeHtml(company.phone) })}<br/>
       ${escapeHtml(company.email)}
     </div>
     <div class="party">
-      <div class="party-label">Destinataire</div>
+      <div class="party-label">${tr('docPaper.recipient', lang)}</div>
       <strong>${escapeHtml(document.clientName)}</strong><br/>
-      Date: ${fmtDateFR(document.createdAt)}<br/>
-      Échéance: ${fmtDateFR(document.dueDate)}
+      ${client?.address ? escapeHtml(client.address) + '<br/>' : ''}\
+      ${client?.matriculeFiscal ? `${tr('docPaper.mf', lang, { n: escapeHtml(client.matriculeFiscal) })}<br/>` : ''}\
+      ${tr('docPaper.date', lang, { d: fmtDateFR(document.createdAt) })}<br/>
+      ${tr('docPaper.dueDate', lang, { d: fmtDateFR(document.dueDate) })}
     </div>
   </div>
   <table>
     <thead>
       <tr>
-        <th>Description</th>
-        <th style="text-align:center">Qté</th>
-        <th style="text-align:right">Prix unit.</th>
-        <th style="text-align:right">Total</th>
+        <th>${tr('docPaper.description', lang)}</th>
+        <th style="text-align:center">${tr('docPaper.qty', lang)}</th>
+        <th style="text-align:right">${tr('docPaper.unitPrice', lang, { sym: symbol })}</th>
+        <th style="text-align:right">${tr('docPaper.lineTotal', lang)}</th>
       </tr>
     </thead>
     <tbody>${rows}</tbody>
   </table>
   <table class="totals">
-    <tr><td>Total HT</td><td style="text-align:right">${fmtCurrency(ht)}</td></tr>
+    <tr><td>${tr('docPaper.totalHt', lang)}</td><td style="text-align:right">${fmt(ht)}</td></tr>
+    ${discount > 0 ? `<tr><td>${tr('docPaper.discount', lang, { pct: discount })}</td><td style="text-align:right;color:#e74c3c">-${fmt(discountAmount)}</td></tr>` : ''}
     ${tvaBlock}
-    <tr class="total-ttc"><td>Total ${isAvoir ? '' : 'TTC'}</td><td style="text-align:right">${fmtCurrency(ttc)}</td></tr>
+    <tr class="total-ttc"><td>${tr('docPaper.totalTtc', lang, { label: isAvoir ? '' : 'TTC' })}</td><td style="text-align:right">${fmt(ttc)}</td></tr>
   </table>
-  ${document.notes ? `<div class="notes"><strong>Conditions</strong><br/>${escapeHtml(document.notes)}</div>` : ''}
-  ${company.rib ? `<div style="margin-top:12px;font-size:10px">RIB: ${escapeHtml(company.bankName)} — ${escapeHtml(company.rib)}</div>` : ''}
-  <div class="footer">Merci de votre confiance — ${escapeHtml(company.email)} — ${escapeHtml(company.website)}</div>
+  ${document.notes ? `<div class="notes"><strong>${tr('docPaper.paymentTerms', lang)}</strong><br/>${escapeHtml(document.notes)}</div>` : ''}
+  ${company.rib ? `<div style="margin-top:12px;font-size:10px">${tr('docPaper.rib', lang, { bank: escapeHtml(company.bankName), rib: escapeHtml(company.rib) })}</div>` : ''}
+  <div class="footer">${tr('docPaper.footer', lang, { email: escapeHtml(company.email), website: escapeHtml(company.website) })}</div>
 </body>
 </html>`;
 }
 
-async function resolveLogoDataUri(company) {
+async function resolveLogoUri(company) {
   if (company?.logo) {
     return company.logo;
   }
-
-  try {
-    const asset = Asset.fromModule(require('../assets/logo.png'));
-    await asset.downloadAsync();
-
-    const uri = asset.localUri || asset.uri;
-    if (!uri) {
-      return '';
-    }
-
-    const base64 = await FileSystem.readAsStringAsync(uri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-    return `data:image/png;base64,${base64}`;
-  } catch {
-    return '';
-  }
+  return '';
 }
 
 function sanitizePdfFileName(docNumber) {
@@ -211,9 +217,27 @@ async function savePdfToIosDocuments(pdfUri, fileName) {
   return { location: 'Fichiers', fileName };
 }
 
-export async function downloadDocumentPdf(document, company) {
-  const logoDataUri = await resolveLogoDataUri(company);
-  const html = buildDocumentHtml(document, company, logoDataUri);
+export async function downloadDocumentPdf(document, company, client, lang = 'fr') {
+  const logoUri = await resolveLogoUri(company);
+  let logoDataUri = '';
+
+  if (logoUri) {
+    if (logoUri.startsWith('data:')) {
+      logoDataUri = logoUri;
+    } else {
+      try {
+        const base64 = await FileSystem.readAsStringAsync(logoUri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        const mimeType = logoUri.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+        logoDataUri = `data:${mimeType};base64,${base64}`;
+      } catch (error) {
+        console.warn('Failed to convert logo to base64:', error);
+      }
+    }
+  }
+
+  const html = buildDocumentHtml(document, company, logoDataUri, client, lang);
   const { uri } = await Print.printToFileAsync({ html });
   await assertPdfReady(uri);
 

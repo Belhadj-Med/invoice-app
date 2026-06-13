@@ -7,41 +7,44 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
+import { useLanguage } from '../context/LanguageContext';
 import DocumentPaper from '../components/DocumentPaper';
 import { downloadDocumentPdf } from '../services/pdfService';
 import { sendDocumentEmail } from '../services/emailService';
-import { STATUS, DOCUMENT_SEND_EMAIL } from '../constants/document';
+import { STATUS } from '../constants/document';
 
 export default function PreviewScreen({ navigation, route }) {
   const {
     previewDocument, company, activeDocumentId,
-    updateDocumentStatus, showToast, loadDocumentForEdit,
+    updateDocumentStatus, showToast, loadDocumentForEdit, getClientById,
   } = useApp();
   const { colors, shared } = useTheme();
+  const { t, language } = useLanguage();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [loading, setLoading] = useState(false);
 
   const origin = route.params?.origin;
 
   const doc = previewDocument;
+  const client = doc.clientId ? getClientById(doc.clientId) : null;
   const statusCfg = STATUS[doc.status] || STATUS.pending;
   const isSaved = doc.id && doc.id !== 'draft';
 
   const handleDownload = async () => {
     if (!isSaved) {
-      showToast('⚠️ Enregistrez le document d\'abord', 'red');
+      showToast(t('preview.saveFirst'), 'red');
       return;
     }
     setLoading(true);
     try {
-      const { location, fileName } = await downloadDocumentPdf(doc, company);
-      showToast(`📥 ${fileName} enregistré dans ${location}`, 'green');
+      const { location, fileName } = await downloadDocumentPdf(doc, company, client, language);
+      showToast(t('preview.downloaded', { file: fileName, loc: location }), 'green');
     } catch (err) {
       if (err?.message === 'DOWNLOAD_CANCELLED') {
-        showToast('Téléchargement annulé', 'yellow');
+        showToast(t('preview.downloadCancelled'), 'yellow');
         return;
       }
-      showToast('❌ Erreur lors du téléchargement', 'red');
+      showToast(t('preview.downloadError'), 'red');
     } finally {
       setLoading(false);
     }
@@ -49,14 +52,14 @@ export default function PreviewScreen({ navigation, route }) {
 
   const handleSend = async () => {
     if (!isSaved) {
-      showToast('⚠️ Enregistrez le document d\'abord', 'red');
+      showToast(t('preview.saveFirst'), 'red');
       return;
     }
     try {
-      await sendDocumentEmail(doc, company, DOCUMENT_SEND_EMAIL);
-      showToast('📧 Application e-mail ouverte', 'green');
+      await sendDocumentEmail(doc, company, company.email, language);
+      showToast(t('preview.emailOpened'), 'green');
     } catch {
-      showToast('❌ Aucune application e-mail', 'red');
+      showToast(t('preview.noEmail'), 'red');
     }
   };
 
@@ -67,11 +70,11 @@ export default function PreviewScreen({ navigation, route }) {
 
   const handleEdit = () => {
     if (!isSaved) {
-      navigation.navigate('Create');
+      navigation.getParent()?.navigate('CreateModal');
       return;
     }
     loadDocumentForEdit(doc.id);
-    navigation.navigate('Create');
+    navigation.getParent()?.navigate('CreateModal');
   };
 
   if (!doc) {
@@ -79,9 +82,9 @@ export default function PreviewScreen({ navigation, route }) {
       <SafeAreaView style={shared.screen}>
         <View style={styles.empty}>
           <Ionicons name="document-outline" size={48} color={colors.text3} />
-          <Text style={{ color: colors.text2, marginTop: 12 }}>Aucun document à afficher</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Create')} style={{ marginTop: 16 }}>
-            <Text style={{ color: colors.accent2, fontWeight: '700' }}>Créer un document</Text>
+          <Text style={{ color: colors.text2, marginTop: 12 }}>{t('preview.empty')}</Text>
+          <TouchableOpacity onPress={() => navigation.getParent()?.navigate('CreateModal')} style={{ marginTop: 16 }}>
+            <Text style={{ color: colors.accent2, fontWeight: '700' }}>{t('preview.createOne')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -103,7 +106,7 @@ export default function PreviewScreen({ navigation, route }) {
         >
           <Ionicons name="arrow-back" size={16} color={colors.text2} />
         </TouchableOpacity>
-        <Text style={shared.screenTitle}>Aperçu</Text>
+        <Text style={shared.screenTitle}>{t('preview.title')}</Text>
         {isSaved && (
           <View style={{ marginLeft: 'auto' }}>
             <StatPillInline type={statusCfg.pill} label={statusCfg.label} colors={colors} />
@@ -112,12 +115,12 @@ export default function PreviewScreen({ navigation, route }) {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <DocumentPaper document={doc} company={company} />
+        <DocumentPaper document={doc} company={company} client={client} />
 
         <TouchableOpacity onPress={handleSend} activeOpacity={0.85} disabled={loading}>
           <LinearGradient colors={[colors.accent, colors.accent2]} style={styles.btnPrimary}>
             <Ionicons name="send" size={16} color="white" />
-            <Text style={styles.btnPrimaryText}>Envoyer par e-mail</Text>
+            <Text style={styles.btnPrimaryText}>{t('preview.sendEmail')}</Text>
           </LinearGradient>
         </TouchableOpacity>
 
@@ -128,21 +131,21 @@ export default function PreviewScreen({ navigation, route }) {
             ) : (
               <>
                 <Ionicons name="download-outline" size={15} color={colors.text2} />
-                <Text style={shared.btnGhostText}>Télécharger PDF</Text>
+                <Text style={shared.btnGhostText}>{t('preview.downloadPdf')}</Text>
               </>
             )}
           </TouchableOpacity>
           {doc.docType === 'Facture' && isSaved && doc.status !== 'paid' && (
             <TouchableOpacity style={[shared.btnGhost, { flex: 1 }]} onPress={handleMarkPaid}>
               <Ionicons name="checkmark-circle-outline" size={15} color={colors.accent3} />
-              <Text style={[shared.btnGhostText, { color: colors.accent3 }]}>Marquer payé</Text>
+              <Text style={[shared.btnGhostText, { color: colors.accent3 }]}>{t('preview.markPaid')}</Text>
             </TouchableOpacity>
           )}
         </View>
 
         <TouchableOpacity style={[shared.btnGhost, { marginTop: 10 }]} onPress={handleEdit}>
           <Ionicons name="create-outline" size={15} color={colors.text2} />
-          <Text style={shared.btnGhostText}>Modifier le document</Text>
+          <Text style={shared.btnGhostText}>{t('preview.editDoc')}</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>

@@ -5,10 +5,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useLanguage } from '../context/LanguageContext';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
 import { STATUS } from '../constants/document';
-import { calcTotals, fmtCurrency, fmtDateFR } from '../utils/documentUtils';
+import { fmtDateFR } from '../utils/documentUtils';
 import StatPill from '../components/StatPill';
 
 function MiniBarChart({ data, colors, styles }) {
@@ -33,7 +34,7 @@ function MiniBarChart({ data, colors, styles }) {
   );
 }
 
-function InvoiceRow({ item, onPress, onDelete, colors, styles }) {
+function InvoiceRow({ item, onPress, onDelete, colors, styles, calcTotals, fmtCurrency }) {
   const cfg = STATUS[item.status] || STATUS.pending;
   const iconColor = cfg.pill === 'green' ? colors.accent3 : cfg.pill === 'yellow' ? colors.warm : colors.accent2;
   const { ttc } = calcTotals(item.lineItems, item.docType);
@@ -58,8 +59,9 @@ function InvoiceRow({ item, onPress, onDelete, colors, styles }) {
 }
 
 export default function DashboardScreen({ navigation }) {
-  const { dashboardStats, openDocumentPreview, company, startNewDocument, deleteDocument } = useApp();
+  const { dashboardStats, openDocumentPreview, company, startNewDocument, deleteDocument, calcTotals, fmtCurrency } = useApp();
   const { colors, shared } = useTheme();
+  const { t } = useLanguage();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const monthLabel = new Date().toLocaleDateString('fr-TN', { month: 'long', year: 'numeric' });
@@ -70,9 +72,9 @@ export default function DashboardScreen({ navigation }) {
   };
 
   const handleDelete = (doc) => {
-    Alert.alert('Supprimer', 'Supprimer ce document ?', [
-      { text: 'Annuler', style: 'cancel' },
-      { text: 'Supprimer', style: 'destructive', onPress: () => deleteDocument(doc.id) },
+    Alert.alert(t('common.delete'), t('dashboard.deleteMessage'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('common.delete'), style: 'destructive', onPress: () => deleteDocument(doc.id) },
     ]);
   };
 
@@ -81,26 +83,26 @@ export default function DashboardScreen({ navigation }) {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-          <Image source={require('../assets/logo.png')} style={styles.brandAvatar} />
+          <Image source={company.logo ? { uri: company.logo } : require('../assets/logo.png')} style={styles.brandAvatar} />
           <View>
-            <Text style={styles.greeting}>Bonjour 👋</Text>
+            <Text style={styles.greeting}>{t('dashboard.greeting')}</Text>
             <Text style={styles.brandName}>{company.name}</Text>
           </View>
         </View>
         </View>
 
         <LinearGradient colors={colors.heroGradient} style={styles.heroCard}>
-          <Text style={styles.heroLabel}>Chiffre d'affaires — {monthLabel}</Text>
+          <Text style={styles.heroLabel}>{t('dashboard.revenue')} — {monthLabel}</Text>
           <Text style={styles.heroRevenue}>{fmtCurrency(dashboardStats.revenue)}</Text>
-          <Text style={styles.heroSub}>Factures payées ce mois</Text>
+          <Text style={styles.heroSub}>{t('dashboard.paidThisMonth')}</Text>
           <MiniBarChart data={dashboardStats.monthlyRevenue} colors={colors} styles={styles} />
         </LinearGradient>
 
         <View style={styles.statsRow}>
           {[
-            { value: String(dashboardStats.invoiceCount), label: 'Documents', color: colors.text },
-            { value: String(dashboardStats.pendingCount), label: 'En attente', color: colors.warm },
-            { value: String(dashboardStats.clientCount), label: 'Clients', color: colors.accent3 },
+            { value: String(dashboardStats.invoiceCount), label: t('dashboard.statDocuments'), color: colors.text },
+            { value: String(dashboardStats.pendingCount), label: t('dashboard.statPending'), color: colors.warm },
+            { value: String(dashboardStats.clientCount), label: t('dashboard.statClients'), color: colors.accent3 },
           ].map(({ value, label, color }) => (
             <View key={label} style={styles.statCard}>
               <Text style={[styles.statNum, { color }]}>{value}</Text>
@@ -110,17 +112,17 @@ export default function DashboardScreen({ navigation }) {
         </View>
 
         <View style={styles.sectionHeader}>
-          <Text style={shared.sectionLabel}>Actions rapides</Text>
+          <Text style={shared.sectionLabel}>{t('dashboard.quickActions')}</Text>
         </View>
         <View style={styles.quickActions}>
           <TouchableOpacity
             style={{ flex: 1 }}
-            onPress={() => { startNewDocument(); navigation.navigate('Create'); }}
+            onPress={() => { startNewDocument(); navigation.getParent()?.navigate('CreateModal'); }}
             activeOpacity={0.85}
           >
             <LinearGradient colors={[colors.accent, colors.accent2]} style={styles.btnPrimary}>
               <Ionicons name="add" size={16} color="white" />
-              <Text style={styles.btnPrimaryText}>Nouvelle facture</Text>
+              <Text style={styles.btnPrimaryText}>{t('dashboard.newInvoice')}</Text>
             </LinearGradient>
           </TouchableOpacity>
           <TouchableOpacity
@@ -129,16 +131,16 @@ export default function DashboardScreen({ navigation }) {
             activeOpacity={0.7}
           >
             <Ionicons name="people" size={16} color={colors.text2} />
-            <Text style={shared.btnGhostText}>Clients</Text>
+            <Text style={shared.btnGhostText}>{t('dashboard.clients')}</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.sectionHeader}>
-          <Text style={shared.sectionLabel}>Documents récents</Text>
+          <Text style={shared.sectionLabel}>{t('dashboard.recentDocs')}</Text>
         </View>
         <View style={shared.card}>
           {dashboardStats.recentDocuments.length === 0 ? (
-            <Text style={[styles.emptyText, { padding: 20 }]}>Aucun document pour le moment</Text>
+            <Text style={[styles.emptyText, { padding: 20 }]}>{t('dashboard.empty')}</Text>
           ) : (
             dashboardStats.recentDocuments.map((item, index) => (
               <React.Fragment key={item.id}>
@@ -148,6 +150,8 @@ export default function DashboardScreen({ navigation }) {
                   onDelete={() => handleDelete(item)}
                   colors={colors}
                   styles={styles}
+                  calcTotals={calcTotals}
+                  fmtCurrency={fmtCurrency}
                 />
                 {index < dashboardStats.recentDocuments.length - 1 && (
                   <View style={styles.divider} />

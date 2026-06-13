@@ -8,8 +8,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
+import { useLanguage } from '../context/LanguageContext';
 
-function LineItemRow({ item, onUpdate, onRemove, styles, colors }) {
+function LineItemRow({ item, onUpdate, onRemove, styles, colors, t, company }) {
   const total = (item.qty * item.price).toFixed(3);
   return (
     <View style={styles.lineRow}>
@@ -20,12 +21,12 @@ function LineItemRow({ item, onUpdate, onRemove, styles, colors }) {
         style={styles.lineDesc}
         value={item.desc}
         onChangeText={(v) => onUpdate(item.id, 'desc', v)}
-        placeholder="Description…"
+        placeholder={t('createDoc.descriptionPH')}
         placeholderTextColor={colors.text3}
       />
       <View style={styles.rowNums}>
         <View style={styles.numField}>
-          <Text style={styles.numLabel}>Qté</Text>
+          <Text style={styles.numLabel}>{t('createDoc.qty')}</Text>
           <TextInput
             style={[styles.numInput, { width: 52 }]}
             value={String(item.qty)}
@@ -35,7 +36,7 @@ function LineItemRow({ item, onUpdate, onRemove, styles, colors }) {
           />
         </View>
         <View style={styles.numField}>
-          <Text style={styles.numLabel}>Prix DT</Text>
+          <Text style={styles.numLabel}>{t('createDoc.price', { sym: company.currencySymbol })}</Text>
           <TextInput
             style={[styles.numInput, { width: 78 }]}
             value={String(item.price)}
@@ -45,7 +46,7 @@ function LineItemRow({ item, onUpdate, onRemove, styles, colors }) {
           />
         </View>
         <View style={styles.totalDisplay}>
-          <Text style={styles.numLabel}>Total</Text>
+          <Text style={styles.numLabel}>{t('createDoc.lineTotal')}</Text>
           <Text style={styles.totalVal}>{total}</Text>
         </View>
       </View>
@@ -56,12 +57,14 @@ function LineItemRow({ item, onUpdate, onRemove, styles, colors }) {
 export default function CreateInvoiceScreen({ navigation }) {
   const {
     draft, setDocType, addLineItem, removeLineItem, updateLineItem,
-    updateDraft, calcTotals, fmtCurrency, saveDocument, showToast, editingDocumentId,
+    updateDraft, calcTotals, fmtCurrency, saveDocument, showToast, editingDocumentId, company,
   } = useApp();
+  const { t } = useLanguage();
   const { colors, shared } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const { ht, tva, ttc } = calcTotals(draft.lineItems, draft.docType);
+  const discount = draft.discount || 0;
+  const { ht, discountAmount, tva, ttc } = calcTotals(draft.lineItems, draft.docType);
   const isAvoir = draft.docType === 'Avoir';
 
   const handlePreview = () => {
@@ -71,7 +74,7 @@ export default function CreateInvoiceScreen({ navigation }) {
 
   const handleRemoveLine = (id) => {
     if (draft.lineItems.length === 1) {
-      showToast('⚠️ Au moins une ligne requise', 'red');
+      showToast(t('createDoc.oneLineRequired'), 'red');
       return;
     }
     removeLineItem(id);
@@ -85,7 +88,7 @@ export default function CreateInvoiceScreen({ navigation }) {
             <Ionicons name="arrow-back" size={16} color={colors.text2} />
           </TouchableOpacity>
           <Text style={shared.screenTitle}>
-            {editingDocumentId ? 'Modifier' : 'Nouveau'} Document
+            {editingDocumentId ? t('createDoc.titleEdit') : t('createDoc.titleNew')} {t('createDoc.document')}
           </Text>
         </View>
 
@@ -97,7 +100,7 @@ export default function CreateInvoiceScreen({ navigation }) {
               onPress={() => setDocType(type)}
               activeOpacity={0.7}
             >
-              <Text style={[styles.tabLabel, draft.docType === type && styles.tabLabelActive]}>{type}</Text>
+              <Text style={[styles.tabLabel, draft.docType === type && styles.tabLabelActive]}>{t('docType.' + type.toLowerCase())}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -108,20 +111,20 @@ export default function CreateInvoiceScreen({ navigation }) {
           keyboardShouldPersistTaps="handled"
         >
           <View style={[shared.card, styles.formCard]}>
-            <Text style={[shared.sectionLabel, { marginBottom: 14 }]}>Informations client</Text>
+            <Text style={[shared.sectionLabel, { marginBottom: 14 }]}>{t('createDoc.clientInfo')}</Text>
             <View style={styles.inputWrap}>
-              <Text style={shared.inputLabel}>Nom du client</Text>
+              <Text style={shared.inputLabel}>{t('createDoc.clientName')}</Text>
               <TextInput
                 style={shared.inputField}
                 value={draft.clientName}
                 onChangeText={(v) => updateDraft({ clientName: v })}
-                placeholder="Nom du client"
+                placeholder={t('createDoc.clientName')}
                 placeholderTextColor={colors.text3}
               />
             </View>
             <View style={styles.row2}>
               <View style={[styles.inputWrap, { flex: 1 }]}>
-                <Text style={shared.inputLabel}>N° Document</Text>
+                <Text style={shared.inputLabel}>{t('createDoc.docNumber')}</Text>
                 <TextInput
                   style={shared.inputField}
                   value={draft.docNumber}
@@ -130,12 +133,12 @@ export default function CreateInvoiceScreen({ navigation }) {
                 />
               </View>
               <View style={[styles.inputWrap, { flex: 1 }]}>
-                <Text style={shared.inputLabel}>Échéance</Text>
+                <Text style={shared.inputLabel}>{t('createDoc.dueDate')}</Text>
                 <TextInput
                   style={shared.inputField}
                   value={draft.dueDate}
                   onChangeText={(v) => updateDraft({ dueDate: v })}
-                  placeholder="AAAA-MM-JJ"
+                  placeholder={t('createDoc.datePlaceholder')}
                   placeholderTextColor={colors.text3}
                 />
               </View>
@@ -143,10 +146,10 @@ export default function CreateInvoiceScreen({ navigation }) {
           </View>
 
           <View style={styles.sectionHeader}>
-            <Text style={shared.sectionLabel}>Prestations</Text>
+            <Text style={shared.sectionLabel}>{t('createDoc.services')}</Text>
             <TouchableOpacity style={styles.addBtn} onPress={addLineItem}>
               <Ionicons name="add" size={13} color={colors.accent2} />
-              <Text style={styles.addBtnText}>Ajouter</Text>
+              <Text style={styles.addBtnText}>{t('createDoc.addLine')}</Text>
             </TouchableOpacity>
           </View>
 
@@ -158,17 +161,36 @@ export default function CreateInvoiceScreen({ navigation }) {
               onRemove={() => handleRemoveLine(item.id)}
               styles={styles}
               colors={colors}
+              t={t}
+              company={company}
             />
           ))}
 
           <View style={styles.totalsBox}>
             <View style={styles.totalsRow}>
-              <Text style={styles.totalsLabel}>Sous-total HT</Text>
+              <Text style={styles.totalsLabel}>{t('createDoc.subtotal')}</Text>
               <Text style={styles.totalsVal}>{fmtCurrency(ht)}</Text>
+            </View>
+            <View style={[styles.totalsRow, styles.totalsRowBorder]}>
+              <Text style={styles.totalsLabel}>{t('createDoc.discount')}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <TextInput
+                  style={[styles.numInput, { width: 56, textAlign: 'center', paddingVertical: 4, fontSize: 12 }]}
+                  value={String(discount)}
+                  onChangeText={(v) => updateDraft({ discount: parseFloat(v) || 0 })}
+                  keyboardType="decimal-pad"
+                  placeholder="0"
+                  placeholderTextColor={colors.text3}
+                />
+                <Text style={[styles.totalsVal, { fontSize: 11 }]}>%</Text>
+                <Text style={[styles.totalsVal, discount > 0 && { color: '#e74c3c' }]}>
+                  {discount > 0 ? `-${fmtCurrency(discountAmount)}` : fmtCurrency(0)}
+                </Text>
+              </View>
             </View>
             {!isAvoir && (
               <View style={[styles.totalsRow, styles.totalsRowBorder]}>
-                <Text style={styles.totalsLabel}>TVA (19 %)</Text>
+                <Text style={styles.totalsLabel}>{t('createDoc.tva', { rate: 19 })}</Text>
                 <Text style={styles.totalsVal}>{fmtCurrency(tva)}</Text>
               </View>
             )}
@@ -176,13 +198,13 @@ export default function CreateInvoiceScreen({ navigation }) {
               colors={['rgba(108,99,255,0.08)', 'rgba(56,217,169,0.04)']}
               style={styles.totalsHighlight}
             >
-              <Text style={styles.totalsLabelHL}>Total {isAvoir ? '' : 'TTC'}</Text>
+              <Text style={styles.totalsLabelHL}>{t('createDoc.total')}{isAvoir ? '' : ' ' + t('createDoc.ttc')}</Text>
               <Text style={styles.totalsValHL}>{fmtCurrency(ttc)}</Text>
             </LinearGradient>
           </View>
 
           <View style={[shared.card, styles.formCard]}>
-            <Text style={[shared.inputLabel, { marginBottom: 10 }]}>Notes / Conditions</Text>
+            <Text style={[shared.inputLabel, { marginBottom: 10 }]}>{t('createDoc.notes')}</Text>
             <TextInput
               style={[shared.inputField, styles.notesInput]}
               value={draft.notes}
@@ -196,7 +218,7 @@ export default function CreateInvoiceScreen({ navigation }) {
           <TouchableOpacity onPress={handlePreview} activeOpacity={0.85} style={{ marginBottom: 10 }}>
             <LinearGradient colors={[colors.accent, colors.accent2]} style={styles.btnPrimary}>
               <Ionicons name="eye" size={16} color="white" />
-              <Text style={styles.btnPrimaryText}>Enregistrer et Aperçu</Text>
+              <Text style={styles.btnPrimaryText}>{t('createDoc.savePreview')}</Text>
             </LinearGradient>
           </TouchableOpacity>
         </ScrollView>

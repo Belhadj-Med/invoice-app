@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "invoice Ghorbali",
+    "name": "Invoice Creator",
     "slug": "ala-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -11,10 +11,11 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "fr.alaapp.mobile",
+      "bundleIdentifier": "com.invoicecreator.app",
       "infoPlist": {
         "UIFileSharingEnabled": true,
-        "LSSupportsOpeningDocumentsInPlace": true
+        "LSSupportsOpeningDocumentsInPlace": true,
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -22,7 +23,7 @@
         "foregroundImage": "./src/assets/logo.png",
         "backgroundColor": "#0a0a0f"
       },
-      "package": "fr.alaapp.mobile",
+      "package": "com.invoicecreator.app",
       "softwareKeyboardLayoutMode": "pan"
     },
     "web": {

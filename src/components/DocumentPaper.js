@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
-import { calcTotals, fmtCurrency, fmtDateFR } from '../utils/documentUtils';
+import { calcTotals as calcTotalsRaw, fmtCurrency as fmtCurrencyRaw, fmtDateFR } from '../utils/documentUtils';
+import { useLanguage } from '../context/LanguageContext';
 
 function Divider() {
   return <View style={styles.pdfDivider} />;
@@ -17,31 +18,40 @@ function TableRow({ desc, qty, price, total }) {
   );
 }
 
-export default function DocumentPaper({ document, company }) {
-  const { ht, tva, ttc } = calcTotals(document.lineItems, document.docType);
+export default function DocumentPaper({ document, company, client }) {
+  const { t } = useLanguage();
+  const taxRate = company.taxRate || 0.19;
+  const symbol = company.currencySymbol || 'DT';
+  const locale = company.currencyLocale || 'fr-TN';
+  const discount = document.discount || 0;
+  const { ht, discountAmount, tva, ttc } = calcTotalsRaw(document.lineItems, document.docType, taxRate, discount);
+  const fmt = (v) => fmtCurrencyRaw(v, symbol, locale);
   const isAvoir = document.docType === 'Avoir';
 
-  const emitterLines = useMemo(() => [
-    company.legalName,
-    company.address,
-    `${company.postalCode} ${company.city}, ${company.country}`,
-    `MF: ${company.matriculeFiscal}`,
-    `Tél: ${company.phone}`,
-    company.email,
-  ].filter(Boolean), [company]);
+  const emitterLines = useMemo(() => {
+    const lines = [
+      company.legalName,
+      company.address,
+      `${company.postalCode} ${company.city}, ${company.country}`,
+    ];
+    if (company.matriculeFiscal) lines.push(t('docPaper.mf', { n: company.matriculeFiscal }));
+    if (company.phone) lines.push(t('docPaper.tel', { n: company.phone }));
+    if (company.email) lines.push(company.email);
+    return lines;
+  }, [company, t]);
 
   return (
     <View style={styles.pdfPaper}>
       <View style={styles.pdfTopRow}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Image source={require('../assets/logo.png')} style={styles.logo} />
+          {company.logo ? <Image source={{ uri: company.logo }} style={styles.logo} /> : null}
           <View>
             <Text style={styles.pdfBrand}>{company.name}</Text>
             <Text style={styles.pdfSubBrand}>{company.legalName}</Text>
           </View>
         </View>
         <View style={{ alignItems: 'flex-end' }}>
-          <Text style={styles.pdfDocType}>{document.docType.toUpperCase()}</Text>
+          <Text style={styles.pdfDocType}>{t('docType.' + document.docType.toLowerCase()).toUpperCase()}</Text>
           <Text style={styles.pdfDocNum}>N° {document.docNumber}</Text>
         </View>
       </View>
@@ -50,24 +60,26 @@ export default function DocumentPaper({ document, company }) {
 
       <View style={styles.pdfParties}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.pdfPartyLabel}>Émetteur</Text>
+          <Text style={styles.pdfPartyLabel}>{t('docPaper.emitter')}</Text>
           {emitterLines.map((line, i) => (
             <Text key={i} style={i === 0 ? styles.pdfPartyName : styles.pdfPartyInfo}>{line}</Text>
           ))}
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.pdfPartyLabel}>Destinataire</Text>
+          <Text style={styles.pdfPartyLabel}>{t('docPaper.recipient')}</Text>
           <Text style={styles.pdfPartyName}>{document.clientName}</Text>
-          <Text style={styles.pdfPartyInfo}>Date: {fmtDateFR(document.createdAt)}</Text>
-          <Text style={styles.pdfPartyInfo}>Échéance: {fmtDateFR(document.dueDate)}</Text>
+          {client?.address ? <Text style={styles.pdfPartyInfo}>{client.address}</Text> : null}
+          {client?.matriculeFiscal ? <Text style={styles.pdfPartyInfo}>{t('docPaper.mf', { n: client.matriculeFiscal })}</Text> : null}
+          <Text style={styles.pdfPartyInfo}>{t('docPaper.date', { d: fmtDateFR(document.createdAt) })}</Text>
+          <Text style={styles.pdfPartyInfo}>{t('docPaper.dueDate', { d: fmtDateFR(document.dueDate) })}</Text>
         </View>
       </View>
 
       <View style={styles.tableHeader}>
-        <Text style={[styles.tableHeaderCell, styles.cellDesc]}>Description</Text>
-        <Text style={[styles.tableHeaderCell, styles.cellQty]}>Qté</Text>
-        <Text style={[styles.tableHeaderCell, styles.cellRate]}>Prix DT</Text>
-        <Text style={[styles.tableHeaderCell, styles.cellTotal]}>Total</Text>
+        <Text style={[styles.tableHeaderCell, styles.cellDesc]}>{t('docPaper.description')}</Text>
+        <Text style={[styles.tableHeaderCell, styles.cellQty]}>{t('docPaper.qty')}</Text>
+            <Text style={[styles.tableHeaderCell, styles.cellRate]}>{t('docPaper.unitPrice', { sym: symbol })}</Text>
+        <Text style={[styles.tableHeaderCell, styles.cellTotal]}>{t('docPaper.lineTotal')}</Text>
       </View>
 
       {(document.lineItems || []).map((item) => (
@@ -85,36 +97,42 @@ export default function DocumentPaper({ document, company }) {
       <View style={styles.pdfTotalsWrap}>
         <View style={styles.pdfTotals}>
           <View style={styles.pdfTotalsRow}>
-            <Text style={styles.pdfTotalsLabel}>Total HT</Text>
-            <Text style={styles.pdfTotalsVal}>{fmtCurrency(ht)}</Text>
+            <Text style={styles.pdfTotalsLabel}>{t('docPaper.totalHt')}</Text>
+            <Text style={styles.pdfTotalsVal}>{fmt(ht)}</Text>
           </View>
+          {discount > 0 && (
+            <View style={styles.pdfTotalsRow}>
+              <Text style={styles.pdfTotalsLabel}>{t('docPaper.discount', { pct: discount })}</Text>
+              <Text style={[styles.pdfTotalsVal, { color: '#e74c3c' }]}>-{fmt(discountAmount)}</Text>
+            </View>
+          )}
           {!isAvoir && (
             <View style={styles.pdfTotalsRow}>
-              <Text style={styles.pdfTotalsLabel}>TVA (19%)</Text>
-              <Text style={styles.pdfTotalsVal}>{fmtCurrency(tva)}</Text>
+              <Text style={styles.pdfTotalsLabel}>{t('docPaper.tva', { rate: (taxRate * 100).toFixed(0) })}</Text>
+              <Text style={styles.pdfTotalsVal}>{fmt(tva)}</Text>
             </View>
           )}
           <View style={styles.pdfTotalsRowHL}>
-            <Text style={styles.pdfTotalsLabelHL}>Total {isAvoir ? '' : 'TTC'}</Text>
-            <Text style={styles.pdfTotalsValHL}>{fmtCurrency(ttc)}</Text>
+            <Text style={styles.pdfTotalsLabelHL}>{t('docPaper.totalTtc', { label: isAvoir ? '' : 'TTC' })}</Text>
+            <Text style={styles.pdfTotalsValHL}>{fmt(ttc)}</Text>
           </View>
         </View>
       </View>
 
       {document.notes ? (
         <View style={styles.pdfNotes}>
-          <Text style={styles.pdfNotesLabel}>Conditions de paiement</Text>
+          <Text style={styles.pdfNotesLabel}>{t('docPaper.paymentTerms')}</Text>
           <Text style={styles.pdfNotesText}>{document.notes}</Text>
         </View>
       ) : null}
 
       {company.rib ? (
-        <Text style={styles.bankInfo}>RIB: {company.bankName} — {company.rib}</Text>
+        <Text style={styles.bankInfo}>{t('docPaper.rib', { bank: company.bankName, rib: company.rib })}</Text>
       ) : null}
 
       <Divider />
       <Text style={styles.pdfFooter}>
-        Merci de votre confiance — {company.email} — {company.website}
+        {t('docPaper.footer', { email: company.email, website: company.website })}
       </Text>
     </View>
   );
